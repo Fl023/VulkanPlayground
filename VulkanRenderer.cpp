@@ -10,12 +10,15 @@ VulkanRenderer::VulkanRenderer()
 {
     window.setUserPointer(this);
 
+    vk::DeviceSize uboSize = sizeof(UniformBufferObject);
+
     frames.reserve(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
-        frames.emplace_back(device);
+        frames.emplace_back(device, graphicsPipeline.getDescriptorSetLayout(), uboSize);
     }
 
+	createSyncObjects();
 	createVertexBuffer();
 	createIndexBuffer();
 }
@@ -55,12 +58,16 @@ void VulkanRenderer::drawFrame()
     if (result == vk::Result::eErrorOutOfDateKHR)
     {
         swapChain.recreate();
+        createSyncObjects();
         return;
     }
     if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
     {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
+
+	// Update uniform buffer with the current image index before recording commands
+    updateUniformBuffer(frameIndex);
 
     // Only reset the fence if we are actually going to submit work
     device.getDevice().resetFences(*frames[frameIndex].inFlightFence);
@@ -72,7 +79,7 @@ void VulkanRenderer::drawFrame()
     // 4. Submit the recorded command buffer
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     
-    vk::Semaphore renderFinishedSemaphore = *frames[frameIndex].renderFinishedSemaphore;
+    vk::Semaphore renderFinishedSemaphore = *renderFinishedSemaphores[imageIndex];
     vk::CommandBuffer cb = *frames[frameIndex].commandBuffer;
 
     const vk::SubmitInfo submitInfo{
@@ -108,6 +115,7 @@ void VulkanRenderer::drawFrame()
     {
         framebufferResized = false;
         swapChain.recreate();
+        createSyncObjects();
     }
     else if (result != vk::Result::eSuccess)
     {
@@ -116,6 +124,31 @@ void VulkanRenderer::drawFrame()
 
     // Advance frame index
     frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void VulkanRenderer::createSyncObjects()
+{
+    renderFinishedSemaphores.clear();
+    // Erstelle genau ein Semaphore pro physischem Swapchain-Bild
+    for (size_t i = 0; i < swapChain.getImages().size(); i++) {
+        renderFinishedSemaphores.emplace_back(device.getDevice(), vk::SemaphoreCreateInfo());
+    }
+}
+
+void VulkanRenderer::updateUniformBuffer(uint32_t currentImage)
+{
+    static auto startTime = std::chrono::high_resolution_clock::now();
+
+    auto currentTime = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+    UniformBufferObject ubo{};
+    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChain.getExtent().width) / static_cast<float>(swapChain.getExtent().height), 0.1f, 10.0f);
+    ubo.proj[1][1] *= -1;
+
+    memcpy(frames[currentImage].uniformBuffer->getMappedData(), &ubo, sizeof(ubo));
 }
 
 void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex) {
@@ -175,6 +208,15 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex) {
 
     vk::Rect2D scissor({0, 0}, swapChain.getExtent());
     commandBuffer.setScissor(0, scissor);
+
+	// Bind Descriptor Sets
+    commandBuffer.bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        graphicsPipeline.getPipelineLayout(),
+        0,
+        *frames[frameIndex].descriptorSet,
+        {}
+	);
 
     // Draw (3 vertices, 1 instance)
     commandBuffer.drawIndexed(indices.size(), 1, 0, 0, 0);

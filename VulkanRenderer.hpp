@@ -24,6 +24,10 @@ public:
     bool framebufferResized = false;
 
 private:
+    void createSyncObjects();
+
+    void updateUniformBuffer(uint32_t currentImage);
+
     void recordCommandBuffer(uint32_t imageIndex);
 
     void transition_image_layout(
@@ -49,6 +53,8 @@ private:
     static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     std::vector<VulkanFrame> frames;
     uint32_t frameIndex = 0;
+
+    std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
 
     std::optional<VulkanBuffer> vertexBuffer;
 	std::optional<VulkanBuffer> indexBuffer;

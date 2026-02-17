@@ -5,7 +5,7 @@
 class VulkanBuffer {
 public:
     VulkanBuffer(const VulkanDevice& device, vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties);
-    ~VulkanBuffer() = default;
+    ~VulkanBuffer();
 
     VulkanBuffer(const VulkanBuffer&) = delete;
     VulkanBuffer& operator=(const VulkanBuffer&) = delete;
@@ -14,6 +14,7 @@ public:
 
     const vk::raii::Buffer& getBuffer() const { return buffer; }
     vk::DeviceSize getSize() const { return bufferSize; }
+	void* getMappedData() const { return mappedData; }
 
     void upload(const void* data, vk::DeviceSize size);
 
@@ -26,4 +27,5 @@ private:
     vk::DeviceSize bufferSize;
     vk::raii::Buffer buffer = nullptr;
     vk::raii::DeviceMemory bufferMemory = nullptr;
+    void* mappedData = nullptr;
 };

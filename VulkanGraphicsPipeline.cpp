@@ -5,6 +5,7 @@
 VulkanGraphicsPipeline::VulkanGraphicsPipeline(const VulkanDevice& device, const VulkanSwapChain& swapChain)
     : device(device), swapChain(swapChain)
 {
+    createDescriptorSetLayout();
     createGraphicsPipeline();
 }
 
@@ -35,6 +36,13 @@ std::vector<char> VulkanGraphicsPipeline::readFile(const std::string& filename)
 
     file.close();
     return buffer;
+}
+
+void VulkanGraphicsPipeline::createDescriptorSetLayout()
+{
+    vk::DescriptorSetLayoutBinding uboLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+    vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = 1, .pBindings = &uboLayoutBinding };
+    descriptorSetLayout = vk::raii::DescriptorSetLayout(device.getDevice(), layoutInfo);
 }
 
 void VulkanGraphicsPipeline::createGraphicsPipeline()
@@ -80,7 +88,7 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
         .rasterizerDiscardEnable = vk::False, 
         .polygonMode = vk::PolygonMode::eFill, 
         .cullMode = vk::CullModeFlagBits::eBack, 
-        .frontFace = vk::FrontFace::eClockwise, 
+        .frontFace = vk::FrontFace::eCounterClockwise,
         .depthBiasEnable = vk::False, 
         .depthBiasSlopeFactor = 1.0f, 
         .lineWidth = 1.0f 
@@ -114,7 +122,8 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
     };
 
     vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ 
-        .setLayoutCount = 0, 
+        .setLayoutCount = 1, 
+        .pSetLayouts = &*descriptorSetLayout, 
         .pushConstantRangeCount = 0 
     };
 

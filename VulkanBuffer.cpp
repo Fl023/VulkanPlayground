@@ -15,30 +15,28 @@ VulkanBuffer::VulkanBuffer(const VulkanDevice& device, vk::DeviceSize size, vk::
 
 	bufferMemory = vk::raii::DeviceMemory(device.getDevice(), allocInfo);
 	buffer.bindMemory(*bufferMemory, 0);
+
+	if (properties & vk::MemoryPropertyFlagBits::eHostVisible) {
+		mappedData = bufferMemory.mapMemory(0, size);
+	}
+}
+
+VulkanBuffer::~VulkanBuffer() {
+	if (mappedData) {
+		bufferMemory.unmapMemory();
+	}
 }
 
 void VulkanBuffer::upload(const void* data, vk::DeviceSize size) {
-	void* mapped = bufferMemory.mapMemory(0, size);
-	std::memcpy(mapped, data, static_cast<size_t>(size));
-	bufferMemory.unmapMemory();
+	if (mappedData) {
+		std::memcpy(mappedData, data, static_cast<size_t>(size));
+	}
+	else {
+		void* tempMapped = bufferMemory.mapMemory(0, size);
+		std::memcpy(tempMapped, data, static_cast<size_t>(size));
+		bufferMemory.unmapMemory();
+	}
 }
-
-//
-//void VulkanBuffer::createVertexBuffer(const std::vector<Vertex>& vertices)
-//{
-//	vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-//
-//	vk::raii::Buffer stagingBuffer = nullptr;
-//	vk::raii::DeviceMemory stagingBufferMemory = nullptr;
-//	createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-//	copyData(vertices.data(), bufferSize, stagingBufferMemory);
-//
-//	vk::raii::Buffer vertexBuffer = nullptr;
-//	vk::raii::DeviceMemory vertexBufferMemory = nullptr;
-//	createBuffer(bufferSize, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst, vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer, vertexBufferMemory);
-//
-//	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
-//}
 
 
 void VulkanBuffer::copyBuffer(const VulkanDevice& device, const vk::raii::Buffer& src, const vk::raii::Buffer& dst, vk::DeviceSize size)
