@@ -6,6 +6,8 @@
 #include "VulkanSwapChain.hpp"
 #include "VulkanGraphicsPipeline.hpp"
 #include "VulkanFrame.hpp"
+#include "VulkanVertex.hpp"
+#include "VulkanBuffer.hpp"
 
 class VulkanRenderer
 {
@@ -34,6 +36,9 @@ private:
         vk::PipelineStageFlags2 dstStageMask
     );
 
+	void createVertexBuffer();
+	void createIndexBuffer();
+
 private:
     VulkanWindow  window;
     VulkanContext context;
@@ -44,4 +49,7 @@ private:
     static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     std::vector<VulkanFrame> frames;
     uint32_t frameIndex = 0;
+
+    std::optional<VulkanBuffer> vertexBuffer;
+	std::optional<VulkanBuffer> indexBuffer;
 };

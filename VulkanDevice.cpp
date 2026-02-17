@@ -88,4 +88,10 @@ void VulkanDevice::createLogicalDevice() {
     device = vk::raii::Device(physicalDevice, rawDevice);
     
     queue = vk::raii::Queue(device, queueIndex, 0);
+
+    vk::CommandPoolCreateInfo poolInfo{
+        .flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer | vk::CommandPoolCreateFlagBits::eTransient,
+        .queueFamilyIndex = queueIndex
+    };
+    commandPool = vk::raii::CommandPool(device, poolInfo);
 }

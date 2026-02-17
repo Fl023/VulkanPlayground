@@ -1,4 +1,5 @@
 #include "VulkanGraphicsPipeline.hpp"
+#include "VulkanVertex.hpp"
 
 
 VulkanGraphicsPipeline::VulkanGraphicsPipeline(const VulkanDevice& device, const VulkanSwapChain& swapChain)
@@ -57,7 +58,12 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
     vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
 
-    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{};
+    auto bindingDescription = Vertex::getBindingDescription();
+    auto attributeDescriptions = Vertex::getAttributeDescriptions();
+    vk::PipelineVertexInputStateCreateInfo vertexInputInfo{ .vertexBindingDescriptionCount = 1,
+                                                            .pVertexBindingDescriptions = &bindingDescription,
+                                                            .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+                                                            .pVertexAttributeDescriptions = attributeDescriptions.data() };
     
     vk::PipelineInputAssemblyStateCreateInfo inputAssembly{ 
         .topology = vk::PrimitiveTopology::eTriangleList,

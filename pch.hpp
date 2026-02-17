@@ -11,6 +11,7 @@
 #include <fstream>
 #include <cstdint>
 #include <limits>
+#include <optional>
 
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_profiles.hpp>

@@ -13,6 +13,7 @@ public:
     const vk::raii::SurfaceKHR& getSurface() const;
     const vk::raii::Queue& getQueue() const;
     const uint32_t& getQueueIndex() const;
+    const vk::raii::CommandPool& getCommandPool() const { return commandPool; }
 
 private:
     void pickPhysicalDevice();
@@ -26,8 +27,8 @@ private:
     vk::raii::PhysicalDevice physicalDevice = nullptr;
     vk::raii::Device device = nullptr;
     vk::raii::Queue queue = nullptr;
-    
     uint32_t queueIndex = ~0;
+    vk::raii::CommandPool commandPool = nullptr;
 
     const VpProfileProperties profile = { VP_KHR_ROADMAP_2022_NAME, VP_KHR_ROADMAP_2022_SPEC_VERSION };
     std::vector<const char*> requiredExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };

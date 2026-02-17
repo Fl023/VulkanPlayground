@@ -15,6 +15,9 @@ VulkanRenderer::VulkanRenderer()
     {
         frames.emplace_back(device);
     }
+
+	createVertexBuffer();
+	createIndexBuffer();
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -156,6 +159,16 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex) {
     // Bind Pipeline
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getGraphicsPipeline());
 
+	// Bind Vertex Buffer
+	if (vertexBuffer) {
+        commandBuffer.bindVertexBuffers(0, *vertexBuffer->getBuffer(), {0});
+	}
+
+	// Bind Index Buffer
+    if (indexBuffer) {
+		commandBuffer.bindIndexBuffer(*indexBuffer->getBuffer(), 0, vk::IndexType::eUint16);
+	}
+
     // Dynamic State: Viewport & Scissor
     vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
     commandBuffer.setViewport(0, viewport);
@@ -164,7 +177,7 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex) {
     commandBuffer.setScissor(0, scissor);
 
     // Draw (3 vertices, 1 instance)
-    commandBuffer.draw(3, 1, 0, 0);
+    commandBuffer.drawIndexed(indices.size(), 1, 0, 0, 0);
 
     commandBuffer.endRendering();
 
@@ -217,4 +230,46 @@ void VulkanRenderer::transition_image_layout(
     };
 
     frames[frameIndex].commandBuffer.pipelineBarrier2(dependencyInfo);
+}
+
+void VulkanRenderer::createVertexBuffer()
+{
+    vk::DeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+
+    VulkanBuffer stagingBuffer(
+        device,
+        bufferSize,
+        vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+
+    stagingBuffer.upload(vertices.data(), bufferSize);
+
+    vertexBuffer.emplace(
+        device,
+        bufferSize,
+        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    VulkanBuffer::copyBuffer(device, stagingBuffer.getBuffer(), vertexBuffer->getBuffer(), bufferSize);
+}
+
+void VulkanRenderer::createIndexBuffer()
+{
+    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+    VulkanBuffer stagingBuffer(
+        device,
+        bufferSize,
+        vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+    stagingBuffer.upload(indices.data(), bufferSize);
+    indexBuffer.emplace(
+        device,
+        bufferSize,
+        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+    VulkanBuffer::copyBuffer(device, stagingBuffer.getBuffer(), indexBuffer->getBuffer(), bufferSize);
 }
