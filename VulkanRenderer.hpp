@@ -8,6 +8,9 @@
 #include "VulkanFrame.hpp"
 #include "VulkanVertex.hpp"
 #include "VulkanBuffer.hpp"
+#include "Mesh.hpp"
+#include "Scene.hpp"
+#include "Components.hpp"
 
 class VulkanRenderer
 {
@@ -16,9 +19,10 @@ public:
     ~VulkanRenderer();
 
     const VulkanContext& getContext() const;
+	const VulkanDevice& getDevice() const { return device; }
     const VulkanWindow& getWindow() const;
 
-    void drawFrame();
+    void drawFrame(Scene& scene);
 
     // Public variable accessed by the Window callback
     bool framebufferResized = false;
@@ -28,7 +32,7 @@ private:
 
     void updateUniformBuffer(uint32_t currentImage);
 
-    void recordCommandBuffer(uint32_t imageIndex);
+    void recordCommandBuffer(uint32_t imageIndex, Scene& scene);
 
     void transition_image_layout(
         uint32_t imageIndex,
@@ -39,9 +43,6 @@ private:
         vk::PipelineStageFlags2 srcStageMask,
         vk::PipelineStageFlags2 dstStageMask
     );
-
-	void createVertexBuffer();
-	void createIndexBuffer();
 
 private:
     VulkanWindow  window;
@@ -55,7 +56,4 @@ private:
     uint32_t frameIndex = 0;
 
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
-
-    std::optional<VulkanBuffer> vertexBuffer;
-	std::optional<VulkanBuffer> indexBuffer;
 };

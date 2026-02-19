@@ -1,4 +1,7 @@
 #include "VulkanRenderer.hpp"
+#include "Scene.hpp"
+#include "Entity.hpp"
+#include "Components.hpp"
 
 
 class HelloTriangleApplication
@@ -6,16 +9,21 @@ class HelloTriangleApplication
 public:
 	void run()
 	{
-		initVulkan();
+		initScene();
 		mainLoop();
 		cleanup();
 	}
 
 private:
 	VulkanRenderer renderer;
+	Scene activeScene;
 
-	void initVulkan()
+	void initScene()
 	{
+		auto myMesh = std::make_shared<Mesh>(renderer.getDevice(), vertices, indices);
+
+		Entity triangle = activeScene.CreateEntity("MainTriangle");
+		triangle.AddComponent<MeshComponent>(myMesh);
 	}
 
 	void mainLoop()
@@ -23,7 +31,7 @@ private:
 		while (!renderer.getWindow().shouldClose())
 		{
 			renderer.getWindow().pollEvents();
-			renderer.drawFrame();
+			renderer.drawFrame(activeScene);
 		}
 	}
 

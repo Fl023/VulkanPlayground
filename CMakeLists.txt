@@ -36,6 +36,7 @@ endfunction()
 find_package(glfw3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED) # Finds the SDK you just installed
 find_package(glm CONFIG REQUIRED)
+find_package(EnTT CONFIG REQUIRED)
 
 # 1. Collect all header files in the current directory
 file(GLOB HEADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
@@ -60,6 +61,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     glfw 
     Vulkan::Vulkan
     glm::glm
+    EnTT::EnTT
 )
 
 # This creates a new build target called "compiled_shaders"

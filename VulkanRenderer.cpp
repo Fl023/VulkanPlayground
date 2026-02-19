@@ -19,8 +19,6 @@ VulkanRenderer::VulkanRenderer()
     }
 
 	createSyncObjects();
-	createVertexBuffer();
-	createIndexBuffer();
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -42,7 +40,7 @@ const VulkanWindow& VulkanRenderer::getWindow() const
     return window;
 }
 
-void VulkanRenderer::drawFrame()
+void VulkanRenderer::drawFrame(Scene& scene)
 {
     // 1. Wait for the previous frame to finish
     auto fenceResult = device.getDevice().waitForFences(*frames[frameIndex].inFlightFence, vk::True, UINT64_MAX);
@@ -74,7 +72,7 @@ void VulkanRenderer::drawFrame()
 
     // 3. Record commands
     frames[frameIndex].commandBuffer.reset();
-    recordCommandBuffer(imageIndex);
+    recordCommandBuffer(imageIndex, scene);
 
     // 4. Submit the recorded command buffer
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
@@ -151,7 +149,7 @@ void VulkanRenderer::updateUniformBuffer(uint32_t currentImage)
     memcpy(frames[currentImage].uniformBuffer->getMappedData(), &ubo, sizeof(ubo));
 }
 
-void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex) {
+void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
     auto& commandBuffer = frames[frameIndex].commandBuffer;
     
     // Begin command buffer
@@ -192,34 +190,35 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex) {
     // Bind Pipeline
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getGraphicsPipeline());
 
-	// Bind Vertex Buffer
-	if (vertexBuffer) {
-        commandBuffer.bindVertexBuffers(0, *vertexBuffer->getBuffer(), {0});
-	}
-
-	// Bind Index Buffer
-    if (indexBuffer) {
-		commandBuffer.bindIndexBuffer(*indexBuffer->getBuffer(), 0, vk::IndexType::eUint16);
-	}
-
-    // Dynamic State: Viewport & Scissor
-    vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
-    commandBuffer.setViewport(0, viewport);
-
-    vk::Rect2D scissor({0, 0}, swapChain.getExtent());
-    commandBuffer.setScissor(0, scissor);
-
-	// Bind Descriptor Sets
+    // Bind Descriptor Sets
     commandBuffer.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         graphicsPipeline.getPipelineLayout(),
         0,
         *frames[frameIndex].descriptorSet,
         {}
-	);
+    );
 
-    // Draw (3 vertices, 1 instance)
-    commandBuffer.drawIndexed(indices.size(), 1, 0, 0, 0);
+    auto view = scene.m_Registry.view<MeshComponent>();
+
+    for (auto entity : view) {
+        auto& meshComp = view.get<MeshComponent>(entity);
+
+        if (meshComp.MeshAsset) {
+            // Bind Vertex & Index Buffer
+            commandBuffer.bindVertexBuffers(0, *meshComp.MeshAsset->getVertexBuffer(), { 0 });
+            commandBuffer.bindIndexBuffer(*meshComp.MeshAsset->getIndexBuffer(), 0, vk::IndexType::eUint16);
+
+            // Dynamic State: Viewport & Scissor
+            vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
+            commandBuffer.setViewport(0, viewport);
+
+            vk::Rect2D scissor({ 0, 0 }, swapChain.getExtent());
+            commandBuffer.setScissor(0, scissor);
+
+            commandBuffer.drawIndexed(meshComp.MeshAsset->getIndexCount(), 1, 0, 0, 0);
+        }
+    }
 
     commandBuffer.endRendering();
 
@@ -272,46 +271,4 @@ void VulkanRenderer::transition_image_layout(
     };
 
     frames[frameIndex].commandBuffer.pipelineBarrier2(dependencyInfo);
-}
-
-void VulkanRenderer::createVertexBuffer()
-{
-    vk::DeviceSize bufferSize = sizeof(Vertex) * vertices.size();
-
-    VulkanBuffer stagingBuffer(
-        device,
-        bufferSize,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-    );
-
-    stagingBuffer.upload(vertices.data(), bufferSize);
-
-    vertexBuffer.emplace(
-        device,
-        bufferSize,
-        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    VulkanBuffer::copyBuffer(device, stagingBuffer.getBuffer(), vertexBuffer->getBuffer(), bufferSize);
-}
-
-void VulkanRenderer::createIndexBuffer()
-{
-    vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-    VulkanBuffer stagingBuffer(
-        device,
-        bufferSize,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-    );
-    stagingBuffer.upload(indices.data(), bufferSize);
-    indexBuffer.emplace(
-        device,
-        bufferSize,
-        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-    VulkanBuffer::copyBuffer(device, stagingBuffer.getBuffer(), indexBuffer->getBuffer(), bufferSize);
 }
