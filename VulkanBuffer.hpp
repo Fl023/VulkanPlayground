@@ -18,11 +18,7 @@ public:
 
     void upload(const void* data, vk::DeviceSize size);
 
-    static void copyBuffer(const VulkanDevice& device, const vk::raii::Buffer& src, const vk::raii::Buffer& dst, vk::DeviceSize size);
-
 private:
-    uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties);
-
     const VulkanDevice& device;
     vk::DeviceSize bufferSize;
     vk::raii::Buffer buffer = nullptr;

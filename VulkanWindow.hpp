@@ -18,6 +18,8 @@ public:
     void pollEvents() const;
     void waitEvents() const;
     void getFramebufferSize(int& width, int& height) const;
+	float getWidth() const;
+	float getHeight() const;
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 

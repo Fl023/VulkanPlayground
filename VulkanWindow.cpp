@@ -60,6 +60,20 @@ void VulkanWindow::getFramebufferSize(int& width, int& height) const
     glfwGetFramebufferSize(window, &width, &height);
 }
 
+float VulkanWindow::getWidth() const
+{
+    int width, height;
+    getFramebufferSize(width, height);
+	return static_cast<float>(width);
+}
+
+float VulkanWindow::getHeight() const
+{
+    int width, height;
+    getFramebufferSize(width, height);
+    return static_cast<float>(height);
+}
+
 void VulkanWindow::setUserPointer(VulkanRenderer* renderer)
 {
     glfwSetWindowUserPointer(window, renderer);

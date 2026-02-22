@@ -8,18 +8,39 @@ public:
     VulkanDevice(const VulkanContext& context, const VulkanWindow& window);
     ~VulkanDevice() = default;
 
+    vk::raii::CommandBuffer beginSingleTimeCommands() const;
+    void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer) const;
+
+    void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) const;
+    void copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) const;
+
+    uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
+
+    void transitionImageLayout(
+        vk::raii::CommandBuffer& commandBuffer,
+        vk::Image image,
+        vk::ImageLayout oldLayout,
+        vk::ImageLayout newLayout,
+        vk::PipelineStageFlags2 srcStageMask,
+        vk::PipelineStageFlags2 dstStageMask,
+        vk::AccessFlags2 srcAccessMask,
+        vk::AccessFlags2 dstAccessMask) const;
+
     const vk::raii::Device& getDevice() const;
     const vk::raii::PhysicalDevice& getPhysicalDevice() const;
     const vk::raii::SurfaceKHR& getSurface() const;
     const vk::raii::Queue& getQueue() const;
     const uint32_t& getQueueIndex() const;
     const vk::raii::CommandPool& getCommandPool() const { return commandPool; }
+    vk::Sampler getDefaultSampler() const { return *defaultSampler; }
 
 private:
     void pickPhysicalDevice();
     bool isDeviceSuitable(const vk::raii::PhysicalDevice& device) const;
     void createLogicalDevice();
+    void createDefaultSampler();
 
+private:
     const VulkanContext& context;
     const VulkanWindow& window;
 
@@ -29,6 +50,7 @@ private:
     vk::raii::Queue queue = nullptr;
     uint32_t queueIndex = ~0;
     vk::raii::CommandPool commandPool = nullptr;
+    vk::raii::Sampler defaultSampler = nullptr;
 
     const VpProfileProperties profile = { VP_KHR_ROADMAP_2022_NAME, VP_KHR_ROADMAP_2022_SPEC_VERSION };
     std::vector<const char*> requiredExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };

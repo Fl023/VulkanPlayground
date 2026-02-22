@@ -30,19 +30,9 @@ public:
 private:
     void createSyncObjects();
 
-    void updateUniformBuffer(uint32_t currentImage);
+    void updateUniformBuffer(uint32_t currentImage, Scene& scene);
 
     void recordCommandBuffer(uint32_t imageIndex, Scene& scene);
-
-    void transition_image_layout(
-        uint32_t imageIndex,
-        vk::ImageLayout oldLayout,
-        vk::ImageLayout newLayout,
-        vk::AccessFlags2 srcAccessMask,
-        vk::AccessFlags2 dstAccessMask,
-        vk::PipelineStageFlags2 srcStageMask,
-        vk::PipelineStageFlags2 dstStageMask
-    );
 
 private:
     VulkanWindow  window;

@@ -7,6 +7,89 @@ VulkanDevice::VulkanDevice(const VulkanContext& context, const VulkanWindow& win
     surface = window.createSurface(context.getInstance());
     pickPhysicalDevice();
     createLogicalDevice();
+    createDefaultSampler();
+}
+
+vk::raii::CommandBuffer VulkanDevice::beginSingleTimeCommands() const
+{
+    vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
+    vk::raii::CommandBuffer commandBuffer = std::move(device.allocateCommandBuffers(allocInfo).front());
+
+    vk::CommandBufferBeginInfo beginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit };
+    commandBuffer.begin(beginInfo);
+
+    return commandBuffer;
+}
+
+void VulkanDevice::endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer) const
+{
+    commandBuffer.end();
+
+    vk::SubmitInfo submitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandBuffer };
+    queue.submit(submitInfo, nullptr);
+    queue.waitIdle();
+}
+
+void VulkanDevice::copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) const
+{
+    vk::raii::CommandBuffer commandCopyBuffer = beginSingleTimeCommands();
+    commandCopyBuffer.copyBuffer(srcBuffer, dstBuffer, vk::BufferCopy(0, 0, size));
+    endSingleTimeCommands(commandCopyBuffer);
+}
+
+void VulkanDevice::copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) const
+{
+    vk::raii::CommandBuffer commandBuffer = beginSingleTimeCommands();
+    vk::BufferImageCopy region{ .bufferOffset = 0, .bufferRowLength = 0, .bufferImageHeight = 0, .imageSubresource = {vk::ImageAspectFlagBits::eColor, 0, 0, 1}, .imageOffset = {0, 0, 0}, .imageExtent = {width, height, 1} };
+
+    commandBuffer.copyBufferToImage(buffer, image, vk::ImageLayout::eTransferDstOptimal, { region });
+
+    endSingleTimeCommands(commandBuffer);
+}
+
+uint32_t VulkanDevice::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const
+{
+    vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+    {
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+        {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("failed to find suitable memory type!");
+}
+
+void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer, vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask) const
+{
+    vk::ImageMemoryBarrier2 barrier = {
+        .srcStageMask = srcStageMask,
+        .srcAccessMask = srcAccessMask,
+        .dstStageMask = dstStageMask,
+        .dstAccessMask = dstAccessMask,
+        .oldLayout = oldLayout,
+        .newLayout = newLayout,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = image,
+        .subresourceRange = {
+            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        }
+    };
+
+    vk::DependencyInfo dependencyInfo = {
+        .dependencyFlags = {},
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &barrier
+    };
+
+    commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 
 const vk::raii::Device& VulkanDevice::getDevice() const { return device; }
@@ -94,4 +177,26 @@ void VulkanDevice::createLogicalDevice() {
         .queueFamilyIndex = queueIndex
     };
     commandPool = vk::raii::CommandPool(device, poolInfo);
+}
+
+void VulkanDevice::createDefaultSampler()
+{
+    vk::PhysicalDeviceProperties properties = physicalDevice.getProperties();
+    vk::SamplerCreateInfo        samplerInfo{
+               .magFilter = vk::Filter::eLinear,
+               .minFilter = vk::Filter::eLinear,
+               .mipmapMode = vk::SamplerMipmapMode::eLinear,
+               .addressModeU = vk::SamplerAddressMode::eRepeat,
+               .addressModeV = vk::SamplerAddressMode::eRepeat,
+               .addressModeW = vk::SamplerAddressMode::eRepeat,
+               .mipLodBias = 0.0f,
+               .anisotropyEnable = vk::True,
+               .maxAnisotropy = properties.limits.maxSamplerAnisotropy,
+               .compareEnable = vk::False,
+               .compareOp = vk::CompareOp::eAlways,
+               .minLod = 0.0f,
+               .maxLod = 0.0f,
+               .borderColor = vk::BorderColor::eIntOpaqueBlack,
+               .unnormalizedCoordinates = vk::False };
+    defaultSampler = vk::raii::Sampler(device, samplerInfo);
 }

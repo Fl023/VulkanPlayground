@@ -37,6 +37,7 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(Vulkan REQUIRED) # Finds the SDK you just installed
 find_package(glm CONFIG REQUIRED)
 find_package(EnTT CONFIG REQUIRED)
+find_package(Stb REQUIRED)
 
 # 1. Collect all header files in the current directory
 file(GLOB HEADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
@@ -56,6 +57,7 @@ source_group("Header Files" FILES ${HEADER_FILES})
 
 # Damit der Compiler den Header mit <> findet (wenn er im Projektordner liegt)
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${PROJECT_NAME} PRIVATE ${Stb_INCLUDE_DIR})
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     glfw 

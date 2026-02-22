@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Mesh.hpp" 
+#include "Camera.hpp"
+#include "Texture.hpp"
 
 struct TagComponent {
     std::string Tag;
@@ -32,3 +34,22 @@ struct MeshComponent {
     MeshComponent() = default;
     MeshComponent(std::shared_ptr<Mesh> mesh) : MeshAsset(std::move(mesh)) {}
 };
+
+struct MaterialComponent {
+    std::shared_ptr<Texture> albedoTexture;
+
+    MaterialComponent() = default;
+    MaterialComponent(std::shared_ptr<Texture> texture) : albedoTexture(texture) {}
+};
+
+struct CameraComponent {
+    Camera SceneCamera; // Deine neue Klasse
+    bool Primary = true;
+    bool FixedAspectRatio = false;
+
+    CameraComponent() = default;
+    CameraComponent(const Camera& camera)
+        : SceneCamera(camera) {
+    }
+};
+

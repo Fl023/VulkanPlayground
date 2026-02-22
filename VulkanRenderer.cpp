@@ -65,7 +65,31 @@ void VulkanRenderer::drawFrame(Scene& scene)
     }
 
 	// Update uniform buffer with the current image index before recording commands
-    updateUniformBuffer(frameIndex);
+    updateUniformBuffer(frameIndex, scene);
+
+    auto materialView = scene.m_Registry.view<MaterialComponent>();
+    if (materialView.begin() != materialView.end()) {
+        auto entity = materialView.front(); // Wir nehmen das erste Objekt mit Material
+        auto& matComp = materialView.get<MaterialComponent>(entity);
+
+        if (matComp.albedoTexture) {
+            // Infos aus der Textur holen (View + Sampler)
+            vk::DescriptorImageInfo imageInfo = matComp.albedoTexture->GetDescriptorInfo();
+
+            // Schreib-Befehl für Binding 1 (unser Sampler im Shader)
+            vk::WriteDescriptorSet descriptorWrite{
+                .dstSet = *frames[frameIndex].descriptorSet,
+                .dstBinding = 1, // Muss mit layout(binding = 1) im Fragment Shader übereinstimmen!
+                .dstArrayElement = 0,
+                .descriptorCount = 1,
+                .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                .pImageInfo = &imageInfo
+            };
+
+            // An die GPU schicken
+            device.getDevice().updateDescriptorSets(descriptorWrite, {});
+        }
+    }
 
     // Only reset the fence if we are actually going to submit work
     device.getDevice().resetFences(*frames[frameIndex].inFlightFence);
@@ -133,21 +157,41 @@ void VulkanRenderer::createSyncObjects()
     }
 }
 
-void VulkanRenderer::updateUniformBuffer(uint32_t currentImage)
-{
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
+void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, Scene& scene) {
     UniformBufferObject ubo{};
-    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swapChain.getExtent().width) / static_cast<float>(swapChain.getExtent().height), 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1;
+
+    auto view = scene.m_Registry.view<TransformComponent, CameraComponent>();
+    for (auto entity : view) {
+        auto& transform = view.get<TransformComponent>(entity);
+        auto& camComp = view.get<CameraComponent>(entity);
+
+        if (camComp.Primary) {
+            // 1. Viewport an Swapchain anpassen
+            camComp.SceneCamera.SetViewportSize(swapChain.getExtent().width, swapChain.getExtent().height);
+
+            // 2. View-Matrix basierend auf dem Transform der Entity berechnen
+            camComp.SceneCamera.RecalculateViewMatrix(transform.GetTransform());
+
+            // 3. Matrizen ins UBO kopieren
+            ubo.view = camComp.SceneCamera.GetViewMatrix();
+            ubo.proj = camComp.SceneCamera.GetProjectionMatrix();
+            break;
+        }
+    }
+
+    auto meshView = scene.m_Registry.view<TransformComponent, MeshComponent>();
+    if (meshView.begin() != meshView.end()) {
+        auto entity = meshView.front(); // Wir nehmen einfach das erste Objekt
+        ubo.model = meshView.get<TransformComponent>(entity).GetTransform();
+    }
+    else {
+        ubo.model = glm::mat4(1.0f);
+    }
 
     memcpy(frames[currentImage].uniformBuffer->getMappedData(), &ubo, sizeof(ubo));
 }
+
+
 
 void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
     auto& commandBuffer = frames[frameIndex].commandBuffer;
@@ -156,16 +200,16 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
     vk::CommandBufferBeginInfo beginInfo{};
     commandBuffer.begin(beginInfo);
 
-    // Transition: Undefined -> Color Attachment
-    transition_image_layout(
-        imageIndex,
+    device.transitionImageLayout(
+        commandBuffer,
+        swapChain.getImages()[imageIndex],
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
-        {},                                                         
-        vk::AccessFlagBits2::eColorAttachmentWrite,                 
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,         
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput          
-    );
+        vk::PipelineStageFlagBits2::eTopOfPipe,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        {},
+        vk::AccessFlagBits2::eColorAttachmentWrite
+	);
 
     // Dynamic Rendering Setup
     vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
@@ -222,53 +266,16 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
 
     commandBuffer.endRendering();
 
-    // Transition: Color Attachment -> Present
-    transition_image_layout(
-        imageIndex,
+    device.transitionImageLayout(
+        commandBuffer,
+        swapChain.getImages()[imageIndex],
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ImageLayout::ePresentSrcKHR,
-        vk::AccessFlagBits2::eColorAttachmentWrite,             
-        {},                                                     
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,     
-        vk::PipelineStageFlagBits2::eBottomOfPipe               
-    );
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits2::eBottomOfPipe,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        {}
+	);
 
     commandBuffer.end();
-}
-
-void VulkanRenderer::transition_image_layout(
-    uint32_t imageIndex,
-    vk::ImageLayout oldLayout,
-    vk::ImageLayout newLayout,
-    vk::AccessFlags2 srcAccessMask,
-    vk::AccessFlags2 dstAccessMask,
-    vk::PipelineStageFlags2 srcStageMask,
-    vk::PipelineStageFlags2 dstStageMask
-) {
-    vk::ImageMemoryBarrier2 barrier = {
-        .srcStageMask = srcStageMask,
-        .srcAccessMask = srcAccessMask,
-        .dstStageMask = dstStageMask,
-        .dstAccessMask = dstAccessMask,
-        .oldLayout = oldLayout,
-        .newLayout = newLayout,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = swapChain.getImages()[imageIndex],
-        .subresourceRange = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1
-        }
-    };
-
-    vk::DependencyInfo dependencyInfo = {
-        .dependencyFlags = {},
-        .imageMemoryBarrierCount = 1,
-        .pImageMemoryBarriers = &barrier
-    };
-
-    frames[frameIndex].commandBuffer.pipelineBarrier2(dependencyInfo);
 }

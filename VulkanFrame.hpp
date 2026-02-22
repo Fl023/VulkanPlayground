@@ -49,15 +49,16 @@ struct VulkanFrame {
 
         // 4. Descriptor Pool für dieses Frame erstellen
         // Wir brauchen Platz für genau ein Uniform Buffer Set
-        vk::DescriptorPoolSize poolSize{
-            .type = vk::DescriptorType::eUniformBuffer,
-            .descriptorCount = 1
+        std::array poolSize{
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1),
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
         };
+
         vk::DescriptorPoolCreateInfo descriptorPoolInfo{
             .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
             .maxSets = 1,
-            .poolSizeCount = 1,
-            .pPoolSizes = &poolSize
+            .poolSizeCount = static_cast<uint32_t>(poolSize.size()),
+            .pPoolSizes = poolSize.data()
         };
         descriptorPool = vk::raii::DescriptorPool(device.getDevice(), descriptorPoolInfo);
 

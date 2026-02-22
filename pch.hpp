@@ -13,6 +13,7 @@
 #include <limits>
 #include <optional>
 #include <chrono>
+#include <array>
 
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_profiles.hpp>
@@ -22,3 +23,4 @@
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
+#include <stb_image.h>

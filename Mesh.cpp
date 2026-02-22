@@ -24,7 +24,7 @@ Mesh::Mesh(const VulkanDevice& device, const std::vector<Vertex>& vertices, cons
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
 
-    VulkanBuffer::copyBuffer(device, vertexStagingBuffer.getBuffer(), m_VertexBuffer->getBuffer(), vertexBufferSize);
+    device.copyBuffer(*vertexStagingBuffer.getBuffer(), *m_VertexBuffer->getBuffer(), vertexBufferSize);
 
 
     VulkanBuffer indexStagingBuffer(
@@ -43,5 +43,5 @@ Mesh::Mesh(const VulkanDevice& device, const std::vector<Vertex>& vertices, cons
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
 
-    VulkanBuffer::copyBuffer(device, indexStagingBuffer.getBuffer(), m_IndexBuffer->getBuffer(), indexBufferSize);
+    device.copyBuffer(*indexStagingBuffer.getBuffer(), *m_IndexBuffer->getBuffer(), indexBufferSize);
 }
