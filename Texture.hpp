@@ -18,9 +18,3 @@ private:
     vk::raii::ImageView m_ImageView = nullptr;
     vk::Sampler m_Sampler;
 };
-
-struct Material {
-    std::shared_ptr<Texture> AlbedoTexture;
-    glm::vec4 ColorTint{ 1.0f, 1.0f, 1.0f, 1.0f };
-    // Später: NormalMaps, Roughness, etc.
-};

@@ -34,11 +34,36 @@ private:
 
 
 		auto myMesh = std::make_shared<Mesh>(renderer.getDevice(), vertices, indices);
-		auto myTexture = std::make_shared<Texture>(renderer.getDevice(), "C:/Users/Flo/Desktop/VulkanPlayground/resources/statue.jpg");
+		auto myTexture = std::make_shared<Texture>(renderer.getDevice(), "resources/statue.jpg");
+		std::shared_ptr<Material> statueMaterial = renderer.createMaterial(myTexture);
 
-		Entity triangle = activeScene.CreateEntity("MainTriangle");
-		triangle.AddComponent<MeshComponent>(myMesh);
-		triangle.AddComponent<MaterialComponent>(myTexture);
+		// --- ERSTES OBJEKT ---
+		Entity triangle1 = activeScene.CreateEntity("MainTriangle");
+		triangle1.AddComponent<MeshComponent>(myMesh);
+		triangle1.AddComponent<MaterialComponent>(statueMaterial);
+
+		// Wir holen das Transform und schieben es nach links
+		auto& trans1 = triangle1.GetComponent<TransformComponent>();
+		trans1.Translation = glm::vec3(-1.0f, 0.0f, 0.0f);
+
+
+		// --- ZWEITES OBJEKT ---
+		Entity triangle2 = activeScene.CreateEntity("SecondTriangle");
+		triangle2.AddComponent<MeshComponent>(myMesh);
+		triangle2.AddComponent<MaterialComponent>(statueMaterial);
+
+		// Wir holen das Transform und schieben es nach rechts
+		auto& trans2 = triangle2.GetComponent<TransformComponent>();
+		trans2.Translation = glm::vec3(1.0f, 0.0f, 0.0f);
+
+		// --- ZWEITES OBJEKT ---
+		Entity triangle3 = activeScene.CreateEntity("SecondTriangle");
+		triangle3.AddComponent<MeshComponent>(myMesh);
+		triangle3.AddComponent<MaterialComponent>(statueMaterial);
+
+		// Wir holen das Transform und schieben es nach rechts
+		auto& trans3 = triangle3.GetComponent<TransformComponent>();
+		trans3.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
 	}
 
 	void mainLoop()

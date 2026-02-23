@@ -3,6 +3,7 @@
 #include "Mesh.hpp" 
 #include "Camera.hpp"
 #include "Texture.hpp"
+#include "Material.hpp"
 
 struct TagComponent {
     std::string Tag;
@@ -36,10 +37,10 @@ struct MeshComponent {
 };
 
 struct MaterialComponent {
-    std::shared_ptr<Texture> albedoTexture;
+    std::shared_ptr<Material> materialAsset;
 
     MaterialComponent() = default;
-    MaterialComponent(std::shared_ptr<Texture> texture) : albedoTexture(texture) {}
+    MaterialComponent(std::shared_ptr<Material> material) : materialAsset(material) {}
 };
 
 struct CameraComponent {

@@ -11,7 +11,9 @@ public:
 
     [[nodiscard]] const vk::raii::Pipeline& getGraphicsPipeline() const;
     [[nodiscard]] const vk::raii::PipelineLayout& getPipelineLayout() const;
-	[[nodiscard]] const vk::raii::DescriptorSetLayout& getDescriptorSetLayout() const { return descriptorSetLayout; }
+	[[nodiscard]] const vk::raii::DescriptorSetLayout& getGlobalDescriptorSetLayout() const { return globalSetLayout; }
+    [[nodiscard]] const vk::raii::DescriptorSetLayout& getMaterialDescriptorSetLayout() const { return materialSetLayout; }
+
 
 private:
 	void createDescriptorSetLayout();
@@ -23,7 +25,8 @@ private:
     const VulkanDevice& device;
     const VulkanSwapChain& swapChain;
     
-    vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
+    vk::raii::DescriptorSetLayout globalSetLayout = nullptr;
+    vk::raii::DescriptorSetLayout materialSetLayout = nullptr;
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline       graphicsPipeline = nullptr;
 };

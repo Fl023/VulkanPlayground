@@ -6,7 +6,8 @@ VulkanRenderer::VulkanRenderer()
       context(),
       device(context, window),
       swapChain(device, window),
-      graphicsPipeline(device, swapChain)
+      graphicsPipeline(device, swapChain),
+      materialAllocator(device.getDevice(), 1000, { {vk::DescriptorType::eCombinedImageSampler, 1} })
 {
     window.setUserPointer(this);
 
@@ -15,7 +16,7 @@ VulkanRenderer::VulkanRenderer()
     frames.reserve(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
-        frames.emplace_back(device, graphicsPipeline.getDescriptorSetLayout(), uboSize);
+        frames.emplace_back(device, graphicsPipeline.getGlobalDescriptorSetLayout(), uboSize);
     }
 
 	createSyncObjects();
@@ -66,30 +67,6 @@ void VulkanRenderer::drawFrame(Scene& scene)
 
 	// Update uniform buffer with the current image index before recording commands
     updateUniformBuffer(frameIndex, scene);
-
-    auto materialView = scene.m_Registry.view<MaterialComponent>();
-    if (materialView.begin() != materialView.end()) {
-        auto entity = materialView.front(); // Wir nehmen das erste Objekt mit Material
-        auto& matComp = materialView.get<MaterialComponent>(entity);
-
-        if (matComp.albedoTexture) {
-            // Infos aus der Textur holen (View + Sampler)
-            vk::DescriptorImageInfo imageInfo = matComp.albedoTexture->GetDescriptorInfo();
-
-            // Schreib-Befehl für Binding 1 (unser Sampler im Shader)
-            vk::WriteDescriptorSet descriptorWrite{
-                .dstSet = *frames[frameIndex].descriptorSet,
-                .dstBinding = 1, // Muss mit layout(binding = 1) im Fragment Shader übereinstimmen!
-                .dstArrayElement = 0,
-                .descriptorCount = 1,
-                .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-                .pImageInfo = &imageInfo
-            };
-
-            // An die GPU schicken
-            device.getDevice().updateDescriptorSets(descriptorWrite, {});
-        }
-    }
 
     // Only reset the fence if we are actually going to submit work
     device.getDevice().resetFences(*frames[frameIndex].inFlightFence);
@@ -148,6 +125,26 @@ void VulkanRenderer::drawFrame(Scene& scene)
     frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
+std::shared_ptr<Material> VulkanRenderer::createMaterial(std::shared_ptr<Texture> texture)
+{
+    vk::raii::DescriptorSet set = materialAllocator.allocate(graphicsPipeline.getMaterialDescriptorSetLayout());
+
+    vk::DescriptorImageInfo imageInfo = texture->GetDescriptorInfo();
+
+    vk::WriteDescriptorSet descriptorWrite{
+        .dstSet = *set,
+        .dstBinding = 0, // Binding 0 in Set 1
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .pImageInfo = &imageInfo
+    };
+
+    device.getDevice().updateDescriptorSets(descriptorWrite, {});
+
+    return std::make_shared<Material>(texture, std::move(set));
+}
+
 void VulkanRenderer::createSyncObjects()
 {
     renderFinishedSemaphores.clear();
@@ -177,15 +174,6 @@ void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, Scene& scene) {
             ubo.proj = camComp.SceneCamera.GetProjectionMatrix();
             break;
         }
-    }
-
-    auto meshView = scene.m_Registry.view<TransformComponent, MeshComponent>();
-    if (meshView.begin() != meshView.end()) {
-        auto entity = meshView.front(); // Wir nehmen einfach das erste Objekt
-        ubo.model = meshView.get<TransformComponent>(entity).GetTransform();
-    }
-    else {
-        ubo.model = glm::mat4(1.0f);
     }
 
     memcpy(frames[currentImage].uniformBuffer->getMappedData(), &ubo, sizeof(ubo));
@@ -239,26 +227,55 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
         vk::PipelineBindPoint::eGraphics,
         graphicsPipeline.getPipelineLayout(),
         0,
-        *frames[frameIndex].descriptorSet,
+        *frames[frameIndex].cameraSet,
         {}
     );
 
-    auto view = scene.m_Registry.view<MeshComponent>();
+    // Dynamic State: Viewport & Scissor
+    vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
+    commandBuffer.setViewport(0, viewport);
+
+    vk::Rect2D scissor({ 0, 0 }, swapChain.getExtent());
+    commandBuffer.setScissor(0, scissor);
+
+    auto view = scene.m_Registry.view<MeshComponent, TransformComponent, MaterialComponent>();
+
+    vk::DescriptorSet lastBoundMaterialSet = nullptr;
 
     for (auto entity : view) {
         auto& meshComp = view.get<MeshComponent>(entity);
+        auto& transformComp = view.get<TransformComponent>(entity);
+        auto& matComp = view.get<MaterialComponent>(entity);
 
         if (meshComp.MeshAsset) {
+            glm::mat4 modelMatrix = transformComp.GetTransform();
+
+            // Send push constant to gpu
+            commandBuffer.pushConstants<glm::mat4>(
+                graphicsPipeline.getPipelineLayout(),
+                vk::ShaderStageFlagBits::eVertex,
+                0,
+                modelMatrix
+            );
+
+            if (matComp.materialAsset) {
+                vk::DescriptorSet currentSet = *matComp.materialAsset->getDescriptorSet();
+
+                if (currentSet != lastBoundMaterialSet) {
+                    commandBuffer.bindDescriptorSets(
+                        vk::PipelineBindPoint::eGraphics,
+                        graphicsPipeline.getPipelineLayout(),
+                        1,
+                        currentSet,
+                        {}
+                    );
+                    lastBoundMaterialSet = currentSet; // Zustand merken
+                }
+            }
+
             // Bind Vertex & Index Buffer
             commandBuffer.bindVertexBuffers(0, *meshComp.MeshAsset->getVertexBuffer(), { 0 });
             commandBuffer.bindIndexBuffer(*meshComp.MeshAsset->getIndexBuffer(), 0, vk::IndexType::eUint16);
-
-            // Dynamic State: Viewport & Scissor
-            vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
-            commandBuffer.setViewport(0, viewport);
-
-            vk::Rect2D scissor({ 0, 0 }, swapChain.getExtent());
-            commandBuffer.setScissor(0, scissor);
 
             commandBuffer.drawIndexed(meshComp.MeshAsset->getIndexCount(), 1, 0, 0, 0);
         }

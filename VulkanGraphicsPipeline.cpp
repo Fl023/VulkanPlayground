@@ -40,12 +40,15 @@ std::vector<char> VulkanGraphicsPipeline::readFile(const std::string& filename)
 
 void VulkanGraphicsPipeline::createDescriptorSetLayout()
 {
-    std::array bindings = {
-        vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr),
-        vk::DescriptorSetLayoutBinding(1, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr)
-    };
-    vk::DescriptorSetLayoutCreateInfo layoutInfo{ .bindingCount = static_cast<uint32_t>(bindings.size()), .pBindings = bindings.data() };    
-    descriptorSetLayout = vk::raii::DescriptorSetLayout(device.getDevice(), layoutInfo);
+    // 1. Layout für Set 0 (Kamera)
+    vk::DescriptorSetLayoutBinding globalBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
+    vk::DescriptorSetLayoutCreateInfo globalLayoutInfo{ .bindingCount = 1, .pBindings = &globalBinding };
+    globalSetLayout = vk::raii::DescriptorSetLayout(device.getDevice(), globalLayoutInfo);
+
+    // 2. Layout für Set 1 (Material)
+    vk::DescriptorSetLayoutBinding materialBinding(0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
+    vk::DescriptorSetLayoutCreateInfo materialLayoutInfo{ .bindingCount = 1, .pBindings = &materialBinding };
+    materialSetLayout = vk::raii::DescriptorSetLayout(device.getDevice(), materialLayoutInfo);
 }
 
 void VulkanGraphicsPipeline::createGraphicsPipeline()
@@ -124,10 +127,19 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
         .pDynamicStates = dynamicStates.data() 
     };
 
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{ 
-        .setLayoutCount = 1, 
-        .pSetLayouts = &*descriptorSetLayout, 
-        .pushConstantRangeCount = 0 
+    vk::PushConstantRange pushConstantRange{
+        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .offset = 0,
+        .size = sizeof(glm::mat4) // 64 Bytes für deine Model-Matrix
+    };
+
+    std::array<vk::DescriptorSetLayout, 2> layouts = { *globalSetLayout, *materialSetLayout };
+
+    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+        .setLayoutCount = static_cast<uint32_t>(layouts.size()),
+        .pSetLayouts = layouts.data(),
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pushConstantRange
     };
 
     pipelineLayout = vk::raii::PipelineLayout(device.getDevice(), pipelineLayoutInfo);

@@ -2,6 +2,7 @@
 
 #include "VulkanDevice.hpp"
 #include "VulkanBuffer.hpp"
+#include "VulkanDescriptorAllocator.hpp"
 
 struct VulkanFrame {
 	// Command Resources
@@ -16,10 +17,11 @@ struct VulkanFrame {
 	std::optional<VulkanBuffer> uniformBuffer;
 
 	// Descriptor Resources
-	vk::raii::DescriptorPool descriptorPool = nullptr;
-	vk::raii::DescriptorSet descriptorSet = nullptr;
+    DescriptorAllocator frameAllocator;
+	vk::raii::DescriptorSet cameraSet = nullptr;
 
 	VulkanFrame(const VulkanDevice& device, const vk::raii::DescriptorSetLayout& layout, vk::DeviceSize uboSize)
+        : frameAllocator(device.getDevice(), 1, { vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1) })
 	{
         // 1. Command Pool & Buffer erstellen
         vk::CommandPoolCreateInfo poolInfo{
@@ -47,28 +49,7 @@ struct VulkanFrame {
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
         );
 
-        // 4. Descriptor Pool für dieses Frame erstellen
-        // Wir brauchen Platz für genau ein Uniform Buffer Set
-        std::array poolSize{
-            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1),
-            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
-        };
-
-        vk::DescriptorPoolCreateInfo descriptorPoolInfo{
-            .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-            .maxSets = 1,
-            .poolSizeCount = static_cast<uint32_t>(poolSize.size()),
-            .pPoolSizes = poolSize.data()
-        };
-        descriptorPool = vk::raii::DescriptorPool(device.getDevice(), descriptorPoolInfo);
-
-        // 5. Descriptor Set allokieren
-        vk::DescriptorSetAllocateInfo descriptorSetAllocInfo{
-            .descriptorPool = *descriptorPool,
-            .descriptorSetCount = 1,
-            .pSetLayouts = &*layout
-        };
-        descriptorSet = std::move(device.getDevice().allocateDescriptorSets(descriptorSetAllocInfo).front());
+        cameraSet = frameAllocator.allocate(layout);
 
         // 6. Das Set mit dem Buffer verknüpfen (Write Descriptor Set)
         vk::DescriptorBufferInfo bufferInfo{
@@ -78,7 +59,7 @@ struct VulkanFrame {
         };
 
         vk::WriteDescriptorSet descriptorWrite{
-            .dstSet = *descriptorSet,
+            .dstSet = *cameraSet,
             .dstBinding = 0,
             .dstArrayElement = 0,
             .descriptorCount = 1,

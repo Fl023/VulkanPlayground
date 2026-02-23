@@ -24,6 +24,8 @@ public:
 
     void drawFrame(Scene& scene);
 
+    std::shared_ptr<Material> createMaterial(std::shared_ptr<Texture> texture);
+
     // Public variable accessed by the Window callback
     bool framebufferResized = false;
 
@@ -46,4 +48,6 @@ private:
     uint32_t frameIndex = 0;
 
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
+
+    DescriptorAllocator materialAllocator;
 };
