@@ -21,6 +21,7 @@ public:
         vk::Image image,
         vk::ImageLayout oldLayout,
         vk::ImageLayout newLayout,
+        uint32_t mipLevels,
         vk::PipelineStageFlags2 srcStageMask,
         vk::PipelineStageFlags2 dstStageMask,
         vk::AccessFlags2 srcAccessMask,

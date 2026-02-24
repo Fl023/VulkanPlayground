@@ -62,7 +62,7 @@ uint32_t VulkanDevice::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFla
     throw std::runtime_error("failed to find suitable memory type!");
 }
 
-void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer, vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::ImageAspectFlags imageAspectFlags) const
+void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer, vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::ImageAspectFlags imageAspectFlags) const
 {
     vk::ImageMemoryBarrier2 barrier = {
         .srcStageMask = srcStageMask,
@@ -77,7 +77,7 @@ void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer,
         .subresourceRange = {
             .aspectMask = imageAspectFlags,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = mipLevels,
             .baseArrayLayer = 0,
             .layerCount = 1
         }
@@ -195,7 +195,7 @@ void VulkanDevice::createDefaultSampler()
                .compareEnable = vk::False,
                .compareOp = vk::CompareOp::eAlways,
                .minLod = 0.0f,
-               .maxLod = 0.0f,
+               .maxLod = vk::LodClampNone,
                .borderColor = vk::BorderColor::eIntOpaqueBlack,
                .unnormalizedCoordinates = vk::False };
     defaultSampler = vk::raii::Sampler(device, samplerInfo);

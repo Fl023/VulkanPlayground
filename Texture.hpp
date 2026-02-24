@@ -14,6 +14,12 @@ public:
     }
 
 private:
+    void generateMipmaps();
+
+private:
+    const VulkanDevice& m_device;
     std::optional<VulkanImage> m_Image;
+    uint32_t m_mipLevels;
+    int m_texWidth, m_texHeight;
     vk::Sampler m_Sampler;
 };
