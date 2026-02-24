@@ -1,13 +1,20 @@
 #include "VulkanImage.hpp"
 #include "VulkanBuffer.hpp"
 
-VulkanImage::VulkanImage(const VulkanDevice& device, uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::ImageAspectFlags aspectFlags)
+VulkanImage::VulkanImage(const VulkanDevice& device, uint32_t width, uint32_t height, vk::SampleCountFlagBits numSamples, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::ImageAspectFlags aspectFlags)
 	: device(device), format(format), width(width), height(height)
 {
-    vk::ImageCreateInfo imageInfo{ .imageType = vk::ImageType::e2D, .format = format,
-        .extent = {width, height, 1}, .mipLevels = 1, .arrayLayers = 1,
-        .samples = vk::SampleCountFlagBits::e1, .tiling = tiling,
-        .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
+    vk::ImageCreateInfo imageInfo{ 
+        .imageType = vk::ImageType::e2D, 
+        .format = format,
+        .extent = {width, height, 1}, 
+        .mipLevels = 1, 
+        .arrayLayers = 1,
+        .samples = numSamples, 
+        .tiling = tiling,
+        .usage = usage, 
+        .sharingMode = vk::SharingMode::eExclusive 
+    };
 
     image = vk::raii::Image(device.getDevice(), imageInfo);
 

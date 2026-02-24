@@ -14,7 +14,7 @@ Texture::Texture(const VulkanDevice& device, const std::string& filePath)
     stagingBuffer.upload(pixels, imageSize);
 	stbi_image_free(pixels);
 
-    m_Image.emplace(device, texWidth, texHeight, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor);
+    m_Image.emplace(device, texWidth, texHeight, vk::SampleCountFlagBits::e1, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor);
 
     auto commandBuffer = device.beginSingleTimeCommands();
     device.transitionImageLayout(commandBuffer, m_Image->getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eTransfer, {}, vk::AccessFlagBits2::eTransferWrite, vk::ImageAspectFlagBits::eColor);

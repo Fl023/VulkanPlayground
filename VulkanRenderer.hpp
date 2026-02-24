@@ -35,6 +35,8 @@ private:
 
     void createDepthResources();
 
+    void createColorResources();
+
     void recreateSwapchainResources();
 
     void updateUniformBuffer(uint32_t currentImage, Scene& scene);
@@ -48,6 +50,7 @@ private:
     VulkanSwapChain swapChain;
     VulkanGraphicsPipeline graphicsPipeline;
     std::optional<VulkanImage> depthImage;
+    std::optional<VulkanImage> colorImage;
 
     static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     std::vector<VulkanFrame> frames;

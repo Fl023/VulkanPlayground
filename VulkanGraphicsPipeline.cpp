@@ -101,8 +101,9 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
     };
 
     vk::PipelineMultisampleStateCreateInfo multisampling{ 
-        .rasterizationSamples = vk::SampleCountFlagBits::e1, 
-        .sampleShadingEnable = vk::False 
+        .rasterizationSamples = device.getMsaaSamples(),
+        .sampleShadingEnable = vk::True,
+        .minSampleShading = 1.0f
     };
 
     vk::PipelineDepthStencilStateCreateInfo depthStencil{

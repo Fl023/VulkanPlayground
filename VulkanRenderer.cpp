@@ -19,6 +19,7 @@ VulkanRenderer::VulkanRenderer()
         frames.emplace_back(device, graphicsPipeline.getGlobalDescriptorSetLayout(), uboSize);
     }
 
+    createColorResources();
     createDepthResources();
 
 	createSyncObjects();
@@ -159,6 +160,7 @@ void VulkanRenderer::createDepthResources()
     depthImage.emplace(device, 
         swapChain.getExtent().width, 
         swapChain.getExtent().height, 
+        device.getMsaaSamples(),
         vk::Format::eD32Sfloat, 
         vk::ImageTiling::eOptimal, 
         vk::ImageUsageFlagBits::eDepthStencilAttachment, 
@@ -166,10 +168,25 @@ void VulkanRenderer::createDepthResources()
         vk::ImageAspectFlagBits::eDepth);
 }
 
+void VulkanRenderer::createColorResources()
+{
+    colorImage.emplace(device,
+        swapChain.getExtent().width,
+        swapChain.getExtent().height,
+        device.getMsaaSamples(),
+        swapChain.getSurfaceFormat().format,
+        vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
+        vk::MemoryPropertyFlagBits::eDeviceLocal,
+        vk::ImageAspectFlagBits::eColor
+    );
+}
+
 void VulkanRenderer::recreateSwapchainResources()
 {
     device.getDevice().waitIdle();
     swapChain.recreate();
+    createColorResources();
     createDepthResources();
     createSyncObjects();
 }
@@ -222,6 +239,17 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
 
     device.transitionImageLayout(
         commandBuffer,
+        colorImage->getImage(),
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::ImageAspectFlagBits::eColor);
+
+    device.transitionImageLayout(
+        commandBuffer,
         depthImage->getImage(),
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthAttachmentOptimal,
@@ -236,12 +264,15 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
     vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
     vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
     
-    vk::RenderingAttachmentInfo attachmentInfo = {
-        .imageView = swapChain.getImageViews()[imageIndex],
+    vk::RenderingAttachmentInfo colorAttachment = {
+        .imageView = colorImage->getImageView(),
         .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .resolveMode = vk::ResolveModeFlagBits::eAverage,
+        .resolveImageView = swapChain.getImageViews()[imageIndex],
+        .resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = clearColor
+        .clearValue = clearColor 
     };
 
     vk::RenderingAttachmentInfo depthAttachmentInfo = {
@@ -256,7 +287,7 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
         .renderArea = {.offset = { 0, 0 }, .extent = swapChain.getExtent()},
         .layerCount = 1,
         .colorAttachmentCount = 1,
-        .pColorAttachments = &attachmentInfo,
+        .pColorAttachments = &colorAttachment,
         .pDepthAttachment = &depthAttachmentInfo
     };
 

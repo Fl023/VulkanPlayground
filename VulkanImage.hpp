@@ -4,7 +4,7 @@
 
 class VulkanImage {
 public:
-    VulkanImage(const VulkanDevice& device, uint32_t width, uint32_t height, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::ImageAspectFlags aspectFlags);
+    VulkanImage(const VulkanDevice& device, uint32_t width, uint32_t height, vk::SampleCountFlagBits numSamples, vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties, vk::ImageAspectFlags aspectFlags);
 
     // Standard-Destruktor (RAII regelt alles)
     ~VulkanImage() = default;

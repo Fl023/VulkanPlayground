@@ -34,12 +34,15 @@ public:
     const uint32_t& getQueueIndex() const;
     const vk::raii::CommandPool& getCommandPool() const { return commandPool; }
     vk::Sampler getDefaultSampler() const { return *defaultSampler; }
+    vk::SampleCountFlagBits getMsaaSamples() const { return msaaSamples; };
+
 
 private:
     void pickPhysicalDevice();
     bool isDeviceSuitable(const vk::raii::PhysicalDevice& device) const;
     void createLogicalDevice();
     void createDefaultSampler();
+    vk::SampleCountFlagBits getMaxUsableSampleCount();
 
 private:
     const VulkanContext& context;
@@ -52,6 +55,7 @@ private:
     uint32_t queueIndex = ~0;
     vk::raii::CommandPool commandPool = nullptr;
     vk::raii::Sampler defaultSampler = nullptr;
+    vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1;
 
     const VpProfileProperties profile = { VP_KHR_ROADMAP_2022_NAME, VP_KHR_ROADMAP_2022_SPEC_VERSION };
     std::vector<const char*> requiredExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
