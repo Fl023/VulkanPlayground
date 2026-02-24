@@ -1,5 +1,5 @@
 struct VSInput {
-    float2 inPos;
+    float3 inPos;
     float3 inColor;
     float2 inTexCoord;
 };
@@ -37,7 +37,7 @@ VSOutput vertMain(VSInput input) {
     VSOutput output;
     // (Hinweis: Falls deine GLM-Matrizen in C++ column-major sind,
     // sorgt Slang in der Regel automatisch für die richtige Übersetzung)
-    output.pos = mul(ubo.proj, mul(ubo.view, mul(push.model, float4(input.inPos, 0.0, 1.0))));
+    output.pos = mul(ubo.proj, mul(ubo.view, mul(push.model, float4(input.inPos, 1.0))));
     output.fragColor = input.inColor;
     output.fragTexCoord = input.inTexCoord;
     return output;

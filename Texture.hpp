@@ -10,11 +10,10 @@ public:
     ~Texture();
 
     vk::DescriptorImageInfo GetDescriptorInfo() const {
-        return vk::DescriptorImageInfo(m_Sampler, *m_ImageView, vk::ImageLayout::eShaderReadOnlyOptimal);
+        return vk::DescriptorImageInfo(m_Sampler, *m_Image->getImageView(), vk::ImageLayout::eShaderReadOnlyOptimal);
     }
 
 private:
     std::optional<VulkanImage> m_Image;
-    vk::raii::ImageView m_ImageView = nullptr;
     vk::Sampler m_Sampler;
 };

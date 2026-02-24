@@ -8,6 +8,7 @@
 #include "VulkanFrame.hpp"
 #include "VulkanVertex.hpp"
 #include "VulkanBuffer.hpp"
+#include "VulkanImage.hpp"
 #include "Mesh.hpp"
 #include "Scene.hpp"
 #include "Components.hpp"
@@ -32,6 +33,10 @@ public:
 private:
     void createSyncObjects();
 
+    void createDepthResources();
+
+    void recreateSwapchainResources();
+
     void updateUniformBuffer(uint32_t currentImage, Scene& scene);
 
     void recordCommandBuffer(uint32_t imageIndex, Scene& scene);
@@ -42,6 +47,7 @@ private:
     VulkanDevice  device;
     VulkanSwapChain swapChain;
     VulkanGraphicsPipeline graphicsPipeline;
+    std::optional<VulkanImage> depthImage;
 
     static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     std::vector<VulkanFrame> frames;

@@ -62,7 +62,7 @@ uint32_t VulkanDevice::findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFla
     throw std::runtime_error("failed to find suitable memory type!");
 }
 
-void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer, vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask) const
+void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer, vk::Image image, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, vk::PipelineStageFlags2 srcStageMask, vk::PipelineStageFlags2 dstStageMask, vk::AccessFlags2 srcAccessMask, vk::AccessFlags2 dstAccessMask, vk::ImageAspectFlags imageAspectFlags) const
 {
     vk::ImageMemoryBarrier2 barrier = {
         .srcStageMask = srcStageMask,
@@ -75,7 +75,7 @@ void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer,
         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
         .image = image,
         .subresourceRange = {
-            .aspectMask = vk::ImageAspectFlagBits::eColor,
+            .aspectMask = imageAspectFlags,
             .baseMipLevel = 0,
             .levelCount = 1,
             .baseArrayLayer = 0,

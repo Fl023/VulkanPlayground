@@ -24,7 +24,8 @@ public:
         vk::PipelineStageFlags2 srcStageMask,
         vk::PipelineStageFlags2 dstStageMask,
         vk::AccessFlags2 srcAccessMask,
-        vk::AccessFlags2 dstAccessMask) const;
+        vk::AccessFlags2 dstAccessMask,
+        vk::ImageAspectFlags imageAspectFlags) const;
 
     const vk::raii::Device& getDevice() const;
     const vk::raii::PhysicalDevice& getPhysicalDevice() const;

@@ -105,6 +105,13 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
         .sampleShadingEnable = vk::False 
     };
 
+    vk::PipelineDepthStencilStateCreateInfo depthStencil{
+            .depthTestEnable = vk::True,
+            .depthWriteEnable = vk::True,
+            .depthCompareOp = vk::CompareOp::eLess,
+            .depthBoundsTestEnable = vk::False,
+            .stencilTestEnable = vk::False };
+
     vk::PipelineColorBlendAttachmentState colorBlendAttachment{ 
         .blendEnable = vk::False,
         .colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA 
@@ -146,7 +153,8 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
 
     vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
         .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &swapChain.getSurfaceFormat().format
+        .pColorAttachmentFormats = &swapChain.getSurfaceFormat().format,
+        .depthAttachmentFormat = vk::Format::eD32Sfloat
     };
 
     vk::GraphicsPipelineCreateInfo pipelineInfo{
@@ -157,6 +165,7 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
         .pViewportState = &viewportState,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
+        .pDepthStencilState = &depthStencil,
         .pColorBlendState = &colorBlending,
         .pDynamicState = &dynamicState,
         .layout = pipelineLayout,

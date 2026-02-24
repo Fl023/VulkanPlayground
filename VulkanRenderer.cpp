@@ -19,6 +19,8 @@ VulkanRenderer::VulkanRenderer()
         frames.emplace_back(device, graphicsPipeline.getGlobalDescriptorSetLayout(), uboSize);
     }
 
+    createDepthResources();
+
 	createSyncObjects();
 }
 
@@ -56,8 +58,7 @@ void VulkanRenderer::drawFrame(Scene& scene)
 
     if (result == vk::Result::eErrorOutOfDateKHR)
     {
-        swapChain.recreate();
-        createSyncObjects();
+        recreateSwapchainResources();
         return;
     }
     if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
@@ -113,8 +114,7 @@ void VulkanRenderer::drawFrame(Scene& scene)
     if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || framebufferResized)
     {
         framebufferResized = false;
-        swapChain.recreate();
-        createSyncObjects();
+        recreateSwapchainResources();
     }
     else if (result != vk::Result::eSuccess)
     {
@@ -152,6 +152,26 @@ void VulkanRenderer::createSyncObjects()
     for (size_t i = 0; i < swapChain.getImages().size(); i++) {
         renderFinishedSemaphores.emplace_back(device.getDevice(), vk::SemaphoreCreateInfo());
     }
+}
+
+void VulkanRenderer::createDepthResources()
+{
+    depthImage.emplace(device, 
+        swapChain.getExtent().width, 
+        swapChain.getExtent().height, 
+        vk::Format::eD32Sfloat, 
+        vk::ImageTiling::eOptimal, 
+        vk::ImageUsageFlagBits::eDepthStencilAttachment, 
+        vk::MemoryPropertyFlagBits::eDeviceLocal, 
+        vk::ImageAspectFlagBits::eDepth);
+}
+
+void VulkanRenderer::recreateSwapchainResources()
+{
+    device.getDevice().waitIdle();
+    swapChain.recreate();
+    createDepthResources();
+    createSyncObjects();
 }
 
 void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, Scene& scene) {
@@ -196,11 +216,25 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
         vk::PipelineStageFlagBits2::eTopOfPipe,
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         {},
-        vk::AccessFlagBits2::eColorAttachmentWrite
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::ImageAspectFlagBits::eColor
 	);
+
+    device.transitionImageLayout(
+        commandBuffer,
+        depthImage->getImage(),
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthAttachmentOptimal,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::ImageAspectFlagBits::eDepth
+    );
 
     // Dynamic Rendering Setup
     vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+    vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
     
     vk::RenderingAttachmentInfo attachmentInfo = {
         .imageView = swapChain.getImageViews()[imageIndex],
@@ -210,11 +244,20 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
         .clearValue = clearColor
     };
 
+    vk::RenderingAttachmentInfo depthAttachmentInfo = {
+        .imageView = depthImage->getImageView(),
+        .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eDontCare,
+        .clearValue = clearDepth 
+    };
+
     vk::RenderingInfo renderingInfo = {
         .renderArea = {.offset = { 0, 0 }, .extent = swapChain.getExtent()},
         .layerCount = 1,
         .colorAttachmentCount = 1,
-        .pColorAttachments = &attachmentInfo
+        .pColorAttachments = &attachmentInfo,
+        .pDepthAttachment = &depthAttachmentInfo
     };
 
     commandBuffer.beginRendering(renderingInfo);
@@ -291,7 +334,8 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         vk::PipelineStageFlagBits2::eBottomOfPipe,
         vk::AccessFlagBits2::eColorAttachmentWrite,
-        {}
+        {},
+        vk::ImageAspectFlagBits::eColor
 	);
 
     commandBuffer.end();

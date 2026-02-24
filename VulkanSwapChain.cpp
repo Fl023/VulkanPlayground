@@ -19,8 +19,6 @@ void VulkanSwapChain::recreate()
         window.waitEvents();
     }
 
-    device.getDevice().waitIdle();
-
     // Cleanup old resources before recreating
     swapChainImageViews.clear();
     // Releasing the RAII handle destroys the old swapchain
