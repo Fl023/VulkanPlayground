@@ -1,8 +1,8 @@
 #pragma once
 
-#include "VulkanDevice.hpp"
-#include "VulkanBuffer.hpp"
-#include "VulkanImage.hpp"
+#include "renderer/VulkanDevice.hpp"
+#include "renderer/VulkanBuffer.hpp"
+#include "renderer/VulkanImage.hpp"
 
 class Texture {
 public:

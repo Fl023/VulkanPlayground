@@ -13,7 +13,7 @@ find_program(SLANGC_EXECUTABLE slangc REQUIRED)
 
 function (add_slang_shader_target TARGET)
   cmake_parse_arguments ("SHADER" "" "" "SOURCES" ${ARGN})
-  set (SHADERS_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders) # Better to use Binary Dir for build artifacts
+  set (SHADERS_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
   set (ENTRY_POINTS -entry vertMain -entry fragMain)
   
   add_custom_command (
@@ -23,7 +23,6 @@ function (add_slang_shader_target TARGET)
   
     add_custom_command (
         OUTPUT  ${SHADERS_DIR}/slang.spv
-        # FIX: Ensure SHADER_SOURCES (plural from the parse_arguments) is used correctly
         COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o slang.spv
         WORKING_DIRECTORY ${SHADERS_DIR}
         DEPENDS ${SHADER_SOURCES}
@@ -34,30 +33,29 @@ function (add_slang_shader_target TARGET)
 endfunction()
 
 find_package(glfw3 CONFIG REQUIRED)
-find_package(Vulkan REQUIRED) # Finds the SDK you just installed
+find_package(Vulkan REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(EnTT CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 
-# 1. Collect all header files in the current directory
-file(GLOB HEADER_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
-
-# 2. Collect all source files (optional but recommended for consistency)
-file(GLOB SOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+file(GLOB_RECURSE ALL_SOURCES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
+)
 
 set(SHADER_SLANG_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.slang")
 
-# 3. Create the executable using both lists
-add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${HEADER_FILES})
+add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
-target_precompile_headers(${PROJECT_NAME} PRIVATE pch.hpp)
+target_precompile_headers(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/pch.hpp")
 
-# 4. Group the headers into the "Header Files" folder for IDEs (Visual Studio/Xcode)
-source_group("Header Files" FILES ${HEADER_FILES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES ${ALL_SOURCES})
 
-# Damit der Compiler den Header mit <> findet (wenn er im Projektordner liegt)
-target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(${PROJECT_NAME} PRIVATE ${Stb_INCLUDE_DIR})
+target_include_directories(${PROJECT_NAME} PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src" # ErmÃ¶glicht #include "Renderer/VulkanDevice.hpp"
+    "${Stb_INCLUDE_DIR}"
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
     glfw 
@@ -78,6 +76,6 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     "${CMAKE_CURRENT_BINARY_DIR}/shaders/slang.spv" "${CMAKE_BINARY_DIR}/slang.spv"
 )
 
-# Kopiert den Ordner 'resources' in das Ausführungsverzeichnis der Exe
+# Kopiert den Ordner 'resources' in das Ausfï¿½hrungsverzeichnis der Exe
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources 
      DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "VulkanContext.hpp"
-#include "VulkanWindow.hpp"
 #include "VulkanDevice.hpp"
 #include "VulkanSwapChain.hpp"
 #include "VulkanGraphicsPipeline.hpp"
@@ -9,9 +7,9 @@
 #include "VulkanVertex.hpp"
 #include "VulkanBuffer.hpp"
 #include "VulkanImage.hpp"
-#include "Mesh.hpp"
-#include "Scene.hpp"
-#include "Components.hpp"
+#include "scene/Mesh.hpp"
+#include "scene/Scene.hpp"
+#include "scene/Components.hpp"
 
 class VulkanRenderer
 {

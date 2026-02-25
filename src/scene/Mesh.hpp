@@ -1,8 +1,8 @@
 #pragma once
 
-#include "VulkanDevice.hpp"
-#include "VulkanBuffer.hpp"
-#include "VulkanVertex.hpp"
+#include "renderer/VulkanDevice.hpp"
+#include "renderer/VulkanBuffer.hpp"
+#include "renderer/VulkanVertex.hpp"
 
 class Mesh {
 public:

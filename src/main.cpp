@@ -1,7 +1,7 @@
-#include "VulkanRenderer.hpp"
-#include "Scene.hpp"
-#include "Entity.hpp"
-#include "Components.hpp"
+#include "renderer/VulkanRenderer.hpp"
+#include "scene/Scene.hpp"
+#include "scene/Entity.hpp"
+#include "scene/Components.hpp"
 
 
 class HelloTriangleApplication
