@@ -1,8 +1,8 @@
 #include "VulkanRenderer.hpp"
 
 
-VulkanRenderer::VulkanRenderer()
-    : window(),
+VulkanRenderer::VulkanRenderer(VulkanWindow& window)
+    : window(window),
       context(),
       device(context, window),
       swapChain(device, window),

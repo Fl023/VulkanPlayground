@@ -2,11 +2,19 @@
 #include "scene/Scene.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Components.hpp"
+#include "core/Input.hpp"
 
 
 class HelloTriangleApplication
 {
 public:
+	HelloTriangleApplication()
+		: mainWindow(1280, 720, "Vulkan Engine"), // Angenommen, dein Fenster hat Konstruktor-Parameter
+		renderer(mainWindow) // Hier wird das Fenster übergeben!
+	{
+		Input::Init(mainWindow.getNativeWindow());
+	}
+
 	void run()
 	{
 		initScene();
@@ -15,6 +23,7 @@ public:
 	}
 
 private:
+	VulkanWindow mainWindow;
 	VulkanRenderer renderer;
 	Scene activeScene;
 	Camera mainCamera;
@@ -70,12 +79,16 @@ private:
 	{
 		static auto startTime = std::chrono::high_resolution_clock::now();
 
+		static auto lastFrameTime = startTime;
+
 		while (!renderer.getWindow().shouldClose())
 		{
 			renderer.getWindow().pollEvents();
 
 			auto currentTime = std::chrono::high_resolution_clock::now();
 			float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+			float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastFrameTime).count();
+			lastFrameTime = currentTime;
 
 			auto view = activeScene.m_Registry.view<TagComponent, TransformComponent>();
 			for (auto entity : view)
@@ -84,7 +97,14 @@ private:
 				if (tag.Tag == "MainTriangle")
 				{
 					auto& trans = view.get<TransformComponent>(entity);
-					trans.Rotation.z = time * glm::radians(90.0f);
+					//trans.Rotation.z = deltaTime * glm::radians(90.0f);
+
+					float speed = 0.5f * deltaTime;
+
+					if (Input::IsKeyPressed(KeyCode::W)) trans.Translation.z -= speed;
+					if (Input::IsKeyPressed(KeyCode::S)) trans.Translation.z += speed;
+					if (Input::IsKeyPressed(KeyCode::A)) trans.Translation.x -= speed;
+					if (Input::IsKeyPressed(KeyCode::D)) trans.Translation.x += speed;
 				}
 			}
 

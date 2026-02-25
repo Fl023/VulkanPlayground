@@ -1,9 +1,9 @@
 #include "VulkanWindow.hpp"
 #include "VulkanRenderer.hpp" // Required to access VulkanRenderer members
 
-VulkanWindow::VulkanWindow()
+VulkanWindow::VulkanWindow(uint32_t width, uint32_t height, const std::string& title)
 {
-    initWindow();
+    initWindow(width, height, title);
 }
 
 VulkanWindow::~VulkanWindow()
@@ -11,12 +11,12 @@ VulkanWindow::~VulkanWindow()
     cleanup();
 }
 
-void VulkanWindow::initWindow()
+void VulkanWindow::initWindow(uint32_t width, uint32_t height, const std::string& title)
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
-    window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
+    window = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
 }
 

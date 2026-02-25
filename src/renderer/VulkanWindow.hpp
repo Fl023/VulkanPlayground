@@ -8,7 +8,7 @@ class VulkanRenderer;
 class VulkanWindow
 {
 public:
-    VulkanWindow();
+    VulkanWindow(uint32_t width, uint32_t height, const std::string& title);
     ~VulkanWindow();
 
     GLFWwindow* getWindow() const;
@@ -20,6 +20,7 @@ public:
     void getFramebufferSize(int& width, int& height) const;
 	float getWidth() const;
 	float getHeight() const;
+    GLFWwindow* getNativeWindow() const { return window; }
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
@@ -28,6 +29,6 @@ public:
 private:
     GLFWwindow* window = nullptr;
 
-    void initWindow();
+    void initWindow(uint32_t width, uint32_t height, const std::string& title);
     void cleanup();
 };

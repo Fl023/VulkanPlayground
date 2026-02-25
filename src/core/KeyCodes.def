@@ -1,0 +1,133 @@
+// This file is not a traditional header. It is meant to be included multiple times
+// by the same file, with the KEY macro defined differently each time. This is an
+// application of the "X-Macro" pattern.
+
+// Format: KEY(name, glfw_value)
+
+// Printable keys
+KEY(Space,               32)
+KEY(Apostrophe,          39)  /* ' */
+KEY(Comma,               44)  /* , */
+KEY(Minus,               45)  /* - */
+KEY(Period,              46)  /* . */
+KEY(Slash,               47)  /* / */
+KEY(D0,                  48)
+KEY(D1,                  49)
+KEY(D2,                  50)
+KEY(D3,                  51)
+KEY(D4,                  52)
+KEY(D5,                  53)
+KEY(D6,                  54)
+KEY(D7,                  55)
+KEY(D8,                  56)
+KEY(D9,                  57)
+KEY(Semicolon,           59)  /* ; */
+KEY(Equal,               61)  /* = */
+KEY(A,                   65)
+KEY(B,                   66)
+KEY(C,                   67)
+KEY(D,                   68)
+KEY(E,                   69)
+KEY(F,                   70)
+KEY(G,                   71)
+KEY(H,                   72)
+KEY(I,                   73)
+KEY(J,                   74)
+KEY(K,                   75)
+KEY(L,                   76)
+KEY(M,                   77)
+KEY(N,                   78)
+KEY(O,                   79)
+KEY(P,                   80)
+KEY(Q,                   81)
+KEY(R,                   82)
+KEY(S,                   83)
+KEY(T,                   84)
+KEY(U,                   85)
+KEY(V,                   86)
+KEY(W,                   87)
+KEY(X,                   88)
+KEY(Y,                   89)
+KEY(Z,                   90)
+KEY(LeftBracket,         91)  /* [ */
+KEY(Backslash,           92)  /* \ */
+KEY(RightBracket,        93)  /* ] */
+KEY(GraveAccent,         96)  /* ` */
+KEY(World1,              161) /* non-US #1 */
+KEY(World2,              162) /* non-US #2 */
+
+// Function keys
+KEY(Escape,              256)
+KEY(Enter,               257)
+KEY(Tab,                 258)
+KEY(Backspace,           259)
+KEY(Insert,              260)
+KEY(Delete,              261)
+KEY(Right,               262)
+KEY(Left,                263)
+KEY(Down,                264)
+KEY(Up,                  265)
+KEY(PageUp,              266)
+KEY(PageDown,            267)
+KEY(Home,                268)
+KEY(End,                 269)
+KEY(CapsLock,            280)
+KEY(ScrollLock,          281)
+KEY(NumLock,             282)
+KEY(PrintScreen,         283)
+KEY(Pause,               284)
+KEY(F1,                  290)
+KEY(F2,                  291)
+KEY(F3,                  292)
+KEY(F4,                  293)
+KEY(F5,                  294)
+KEY(F6,                  295)
+KEY(F7,                  296)
+KEY(F8,                  297)
+KEY(F9,                  298)
+KEY(F10,                 299)
+KEY(F11,                 300)
+KEY(F12,                 301)
+KEY(F13,                 302)
+KEY(F14,                 303)
+KEY(F15,                 304)
+KEY(F16,                 305)
+KEY(F17,                 306)
+KEY(F18,                 307)
+KEY(F19,                 308)
+KEY(F20,                 309)
+KEY(F21,                 310)
+KEY(F22,                 311)
+KEY(F23,                 312)
+KEY(F24,                 313)
+KEY(F25,                 314)
+
+// Keypad keys
+KEY(KP0,                 320)
+KEY(KP1,                 321)
+KEY(KP2,                 322)
+KEY(KP3,                 323)
+KEY(KP4,                 324)
+KEY(KP5,                 325)
+KEY(KP6,                 326)
+KEY(KP7,                 327)
+KEY(KP8,                 328)
+KEY(KP9,                 329)
+KEY(KPDecimal,           330)
+KEY(KPDivide,            331)
+KEY(KPMultiply,          332)
+KEY(KPSubtract,          333)
+KEY(KPAdd,               334)
+KEY(KPEnter,             335)
+KEY(KPEqual,             336)
+
+// Modifier keys
+KEY(LeftShift,           340)
+KEY(LeftControl,         341)
+KEY(LeftAlt,             342)
+KEY(LeftSuper,           343) // Windows key, Command key
+KEY(RightShift,          344)
+KEY(RightControl,        345)
+KEY(RightAlt,            346)
+KEY(RightSuper,          347)
+KEY(Menu,                348)

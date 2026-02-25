@@ -14,7 +14,7 @@
 class VulkanRenderer
 {
 public:
-    VulkanRenderer();
+    VulkanRenderer(VulkanWindow& window);
     ~VulkanRenderer();
 
     const VulkanContext& getContext() const;
@@ -42,7 +42,7 @@ private:
     void recordCommandBuffer(uint32_t imageIndex, Scene& scene);
 
 private:
-    VulkanWindow  window;
+    VulkanWindow&  window;
     VulkanContext context;
     VulkanDevice  device;
     VulkanSwapChain swapChain;
