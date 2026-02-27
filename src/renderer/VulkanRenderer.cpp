@@ -23,6 +23,7 @@ VulkanRenderer::VulkanRenderer(VulkanWindow& window)
     createDepthResources();
 
 	createSyncObjects();
+    imGuiLayer = std::make_unique<ImGuiLayer>(device, swapChain);
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -124,6 +125,11 @@ void VulkanRenderer::drawFrame(Scene& scene)
 
     // Advance frame index
     frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void VulkanRenderer::beginUI()
+{
+    imGuiLayer->beginFrame();
 }
 
 std::shared_ptr<Material> VulkanRenderer::createMaterial(std::shared_ptr<Texture> texture)
@@ -359,6 +365,8 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
             commandBuffer.drawIndexed(meshComp.MeshAsset->getIndexCount(), 1, 0, 0, 0);
         }
     }
+
+    imGuiLayer->recordImGuiCommands(commandBuffer);
 
     commandBuffer.endRendering();
 

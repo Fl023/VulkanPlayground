@@ -92,8 +92,11 @@ void VulkanDevice::transitionImageLayout(vk::raii::CommandBuffer& commandBuffer,
     commandBuffer.pipelineBarrier2(dependencyInfo);
 }
 
+
+const VulkanContext& VulkanDevice::getContext() const { return context; }
 const vk::raii::Device& VulkanDevice::getDevice() const { return device; }
 const vk::raii::PhysicalDevice& VulkanDevice::getPhysicalDevice() const { return physicalDevice; }
+const VulkanWindow& VulkanDevice::getWindow() const { return window; }
 const vk::raii::SurfaceKHR& VulkanDevice::getSurface() const { return surface; }
 const vk::raii::Queue& VulkanDevice::getQueue() const { return queue; }
 const uint32_t& VulkanDevice::getQueueIndex() const { return queueIndex; }

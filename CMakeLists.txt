@@ -37,6 +37,7 @@ find_package(Vulkan REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(EnTT CONFIG REQUIRED)
 find_package(Stb REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 file(GLOB_RECURSE ALL_SOURCES 
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
@@ -62,6 +63,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Vulkan::Vulkan
     glm::glm
     EnTT::EnTT
+    imgui::imgui
 )
 
 # This creates a new build target called "compiled_shaders"

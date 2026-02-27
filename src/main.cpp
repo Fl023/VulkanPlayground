@@ -10,7 +10,7 @@ class HelloTriangleApplication
 public:
 	HelloTriangleApplication()
 		: mainWindow(1280, 720, "Vulkan Engine"), // Angenommen, dein Fenster hat Konstruktor-Parameter
-		renderer(mainWindow) // Hier wird das Fenster übergeben!
+		renderer(mainWindow) // Hier wird das Fenster ï¿½bergeben!
 	{
 		Input::Init(mainWindow.getNativeWindow());
 	}
@@ -108,7 +108,25 @@ private:
 				}
 			}
 
+			// --- NEU: 1. ImGui Frame starten ---
+			renderer.beginUI();
+
+			// --- NEU: 2. UI definieren ---
+			// (Durch Viewports kannst du dieses Fenster spÃ¤ter einfach aus dem Hauptfenster rausziehen!)
+			ImGui::Begin("Engine Debugger");
+			ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+			ImGui::Text("DeltaTime: %.3f ms", deltaTime * 1000.0f);
+			ImGui::End();
+
+			// --- 3. Szene & UI auf die GPU schicken ---
 			renderer.drawFrame(activeScene);
+
+			// --- NEU: 4. Externe ImGui Fenster (Viewports) updaten ---
+			if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+			{
+				ImGui::UpdatePlatformWindows();
+				ImGui::RenderPlatformWindowsDefault();
+			}
 		}
 		renderer.getDevice().getDevice().waitIdle();
 	}

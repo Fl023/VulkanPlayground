@@ -28,8 +28,10 @@ public:
         vk::AccessFlags2 dstAccessMask,
         vk::ImageAspectFlags imageAspectFlags) const;
 
+    const VulkanContext& getContext() const;
     const vk::raii::Device& getDevice() const;
     const vk::raii::PhysicalDevice& getPhysicalDevice() const;
+	const VulkanWindow& getWindow() const;
     const vk::raii::SurfaceKHR& getSurface() const;
     const vk::raii::Queue& getQueue() const;
     const uint32_t& getQueueIndex() const;

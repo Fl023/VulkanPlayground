@@ -10,6 +10,7 @@
 #include "scene/Mesh.hpp"
 #include "scene/Scene.hpp"
 #include "scene/Components.hpp"
+#include "ImGuiLayer.hpp"
 
 class VulkanRenderer
 {
@@ -22,6 +23,7 @@ public:
     const VulkanWindow& getWindow() const;
 
     void drawFrame(Scene& scene);
+    void beginUI();
 
     std::shared_ptr<Material> createMaterial(std::shared_ptr<Texture> texture);
 
@@ -57,4 +59,5 @@ private:
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
 
     DescriptorAllocator materialAllocator;
+    std::unique_ptr<ImGuiLayer> imGuiLayer;
 };

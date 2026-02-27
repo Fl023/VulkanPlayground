@@ -5,6 +5,14 @@
     "glfw3",
     "glm",
     "entt",
-    "stb"
+    "stb",
+    {
+      "name": "imgui",
+      "features": [
+        "glfw-binding",
+        "vulkan-binding",
+        "docking-experimental"
+      ]
+    }
   ]
 }
