@@ -152,9 +152,11 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
 
     pipelineLayout = vk::raii::PipelineLayout(device.getDevice(), pipelineLayoutInfo);
 
+    vk::Format colorAttachmentFormat = swapChain.getSurfaceFormat().format;
+
     vk::PipelineRenderingCreateInfo pipelineRenderingCreateInfo{
         .colorAttachmentCount = 1,
-        .pColorAttachmentFormats = &swapChain.getSurfaceFormat().format,
+        .pColorAttachmentFormats = &colorAttachmentFormat,
         .depthAttachmentFormat = vk::Format::eD32Sfloat
     };
 

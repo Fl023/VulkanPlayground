@@ -1,6 +1,7 @@
 #include "Mesh.hpp"
 
-Mesh::Mesh(const VulkanDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint16_t>& indices)
+Mesh::Mesh(const VulkanDevice& device, const std::string& name, const std::vector<Vertex>& vertices, const std::vector<uint16_t>& indices)
+	: m_Name(name)
 {
     m_VertexCount = static_cast<uint32_t>(vertices.size());
     m_IndexCount = static_cast<uint32_t>(indices.size());

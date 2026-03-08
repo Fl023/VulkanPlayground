@@ -25,7 +25,9 @@ public:
     void drawFrame(Scene& scene);
     void beginUI();
 
-    std::shared_ptr<Material> createMaterial(std::shared_ptr<Texture> texture);
+    std::shared_ptr<Material> createMaterial(const std::string& name, std::shared_ptr<Texture> texture);
+    void SetDefaultMaterial(std::shared_ptr<Material> material) { m_DefaultMaterial = material; }
+    void UpdateMaterialTexture(std::shared_ptr<Material> material, std::shared_ptr<Texture> newTexture);
 
     // Public variable accessed by the Window callback
     bool framebufferResized = false;
@@ -59,5 +61,6 @@ private:
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
 
     DescriptorAllocator materialAllocator;
+    std::shared_ptr<Material> m_DefaultMaterial;
     std::unique_ptr<ImGuiLayer> imGuiLayer;
 };

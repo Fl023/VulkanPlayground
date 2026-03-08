@@ -12,6 +12,10 @@ public:
     // Erstellt eine Entity und fügt Standard-Komponenten hinzu
     Entity CreateEntity(const std::string& name = std::string());
 
+    void OnUpdate(float deltaTime);
+
+    void DestroyEntity(Entity entity);
+
     // Wir machen die Registry public für das RenderSystem (einfacher für den Anfang)
     entt::registry m_Registry;
 

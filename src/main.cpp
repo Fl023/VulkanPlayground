@@ -3,14 +3,16 @@
 #include "scene/Entity.hpp"
 #include "scene/Components.hpp"
 #include "core/Input.hpp"
+#include "scene/AssetManager.hpp"
+#include "editor/EditorUI.hpp"
 
 
 class HelloTriangleApplication
 {
 public:
 	HelloTriangleApplication()
-		: mainWindow(1280, 720, "Vulkan Engine"), // Angenommen, dein Fenster hat Konstruktor-Parameter
-		renderer(mainWindow) // Hier wird das Fenster �bergeben!
+		: mainWindow(1280, 720, "Vulkan Engine"),
+		renderer(mainWindow), mainCamera("Main Camera")
 	{
 		Input::Init(mainWindow.getNativeWindow());
 	}
@@ -27,9 +29,27 @@ private:
 	VulkanRenderer renderer;
 	Scene activeScene;
 	Camera mainCamera;
+	Entity m_SelectedEntity;
+
+	AssetManager assetManager;
+	EditorUI editorUI;
 
 	void initScene()
 	{
+		// 1. --- DEFAULT ASSETS ERSTELLEN ---
+
+		// Weiße Default-Textur im RAM erstellen
+		uint32_t whitePixel = 0xFFFFFFFF;
+		auto defaultTex = std::make_shared<Texture>(renderer.getDevice(), 1, 1, &whitePixel);
+		assetManager.AddTexture("Default White", defaultTex);
+
+		// Default-Material erstellen
+		auto defaultMat = renderer.createMaterial("Default Material", defaultTex);
+		assetManager.AddMaterial("Default Material", defaultMat);
+
+		renderer.SetDefaultMaterial(defaultMat);
+
+
 		Entity cameraEntity = activeScene.CreateEntity("MainCamera");
 		float aspect = (float)renderer.getWindow().getWidth() / (float)renderer.getWindow().getHeight();
 		mainCamera.SetPerspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
@@ -41,14 +61,18 @@ private:
 		glm::vec3 direction = glm::normalize(glm::vec3(0.0f) - trans.Translation);
 		trans.Rotation = glm::eulerAngles(glm::quatLookAt(direction, glm::vec3(0.0f, 0.0f, 1.0f)));
 
-
-		auto myMesh = std::make_shared<Mesh>(renderer.getDevice(), vertices, indices);
+		auto squareMesh = std::make_shared<Mesh>(renderer.getDevice(), "Square", squareVertices, squareIndices);
+		assetManager.AddMesh("Square", squareMesh);
+		auto myMesh = std::make_shared<Mesh>(renderer.getDevice(), "Cube", cubeVertices, cubeIndices);
+		assetManager.AddMesh("Cube", myMesh);
 		auto myTexture = std::make_shared<Texture>(renderer.getDevice(), "resources/statue.jpg");
-		std::shared_ptr<Material> statueMaterial = renderer.createMaterial(myTexture);
+		assetManager.AddTexture("Statue Texture", myTexture);
+		std::shared_ptr<Material> statueMaterial = renderer.createMaterial("Statue Material", myTexture);
+		assetManager.AddMaterial("Statue Material", statueMaterial);
 
 		// --- ERSTES OBJEKT ---
 		Entity triangle1 = activeScene.CreateEntity("MainTriangle");
-		triangle1.AddComponent<MeshComponent>(myMesh);
+		triangle1.AddComponent<MeshComponent>(assetManager.GetMeshes().at("Cube"));
 		triangle1.AddComponent<MaterialComponent>(statueMaterial);
 
 		// Wir holen das Transform und schieben es nach links
@@ -58,27 +82,17 @@ private:
 
 		// --- ZWEITES OBJEKT ---
 		Entity triangle2 = activeScene.CreateEntity("SecondTriangle");
-		triangle2.AddComponent<MeshComponent>(myMesh);
+		triangle2.AddComponent<MeshComponent>(assetManager.GetMeshes().at("Cube"));
 		triangle2.AddComponent<MaterialComponent>(statueMaterial);
 
 		// Wir holen das Transform und schieben es nach rechts
 		auto& trans2 = triangle2.GetComponent<TransformComponent>();
 		trans2.Translation = glm::vec3(1.0f, 0.0f, 0.0f);
-
-		// --- ZWEITES OBJEKT ---
-		Entity triangle3 = activeScene.CreateEntity("SecondTriangle");
-		triangle3.AddComponent<MeshComponent>(myMesh);
-		triangle3.AddComponent<MaterialComponent>(statueMaterial);
-
-		// Wir holen das Transform und schieben es nach rechts
-		auto& trans3 = triangle3.GetComponent<TransformComponent>();
-		trans3.Translation = glm::vec3(0.0f, 0.0f, 0.0f);
 	}
 
 	void mainLoop()
 	{
 		static auto startTime = std::chrono::high_resolution_clock::now();
-
 		static auto lastFrameTime = startTime;
 
 		while (!renderer.getWindow().shouldClose())
@@ -86,49 +100,29 @@ private:
 			renderer.getWindow().pollEvents();
 
 			auto currentTime = std::chrono::high_resolution_clock::now();
-			float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 			float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastFrameTime).count();
 			lastFrameTime = currentTime;
 
-			auto view = activeScene.m_Registry.view<TagComponent, TransformComponent>();
-			for (auto entity : view)
-			{
-				auto& tag = view.get<TagComponent>(entity);
-				if (tag.Tag == "MainTriangle")
-				{
-					auto& trans = view.get<TransformComponent>(entity);
-					//trans.Rotation.z = deltaTime * glm::radians(90.0f);
+			// --- 1. SPIELLOGIK ---
+			activeScene.OnUpdate(deltaTime);
 
-					float speed = 0.5f * deltaTime;
-
-					if (Input::IsKeyPressed(KeyCode::W)) trans.Translation.z -= speed;
-					if (Input::IsKeyPressed(KeyCode::S)) trans.Translation.z += speed;
-					if (Input::IsKeyPressed(KeyCode::A)) trans.Translation.x -= speed;
-					if (Input::IsKeyPressed(KeyCode::D)) trans.Translation.x += speed;
-				}
-			}
-
-			// --- NEU: 1. ImGui Frame starten ---
+			// --- 2. UI ZEICHNEN ---
 			renderer.beginUI();
+			editorUI.Draw(activeScene, assetManager, renderer);
 
-			// --- NEU: 2. UI definieren ---
-			// (Durch Viewports kannst du dieses Fenster später einfach aus dem Hauptfenster rausziehen!)
-			ImGui::Begin("Engine Debugger");
-			ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
-			ImGui::Text("DeltaTime: %.3f ms", deltaTime * 1000.0f);
-			ImGui::End();
-
-			// --- 3. Szene & UI auf die GPU schicken ---
+			// --- 3. RENDERN ---
 			renderer.drawFrame(activeScene);
 
-			// --- NEU: 4. Externe ImGui Fenster (Viewports) updaten ---
+			// --- VIEWPORTS UPDATEN ---
 			if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 			{
 				ImGui::UpdatePlatformWindows();
 				ImGui::RenderPlatformWindowsDefault();
 			}
 		}
+
 		renderer.getDevice().getDevice().waitIdle();
+		assetManager.Clear();
 	}
 
 	void cleanup()

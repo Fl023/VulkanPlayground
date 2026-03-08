@@ -14,6 +14,7 @@
 #include <optional>
 #include <chrono>
 #include <array>
+#include <unordered_map>
 
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_profiles.hpp>
@@ -24,6 +25,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <stb_image.h>
 #include <imgui.h>
 #include <imgui_impl_glfw.h>

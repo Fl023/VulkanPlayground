@@ -1,7 +1,7 @@
 #include "Texture.hpp"
 
 Texture::Texture(const VulkanDevice& device, const std::string& filePath)
-    : m_device(device)
+	: m_device(device), m_FilePath(filePath)
 {
     int texChannels;
     stbi_uc* pixels = stbi_load(filePath.c_str(), &m_texWidth, &m_texHeight, &texChannels, STBI_rgb_alpha);
@@ -12,27 +12,37 @@ Texture::Texture(const VulkanDevice& device, const std::string& filePath)
     }
 
     m_mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(m_texWidth, m_texHeight)))) + 1;
-
-
-	VulkanBuffer stagingBuffer(device, imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-    stagingBuffer.upload(pixels, imageSize);
+	createVulkanImage(pixels, imageSize);
 	stbi_image_free(pixels);
+}
 
-    m_Image.emplace(device, m_texWidth, m_texHeight, m_mipLevels, vk::SampleCountFlagBits::e1, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor);
-
-    auto commandBuffer = device.beginSingleTimeCommands();
-    device.transitionImageLayout(commandBuffer, m_Image->getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, m_mipLevels, vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eTransfer, {}, vk::AccessFlagBits2::eTransferWrite, vk::ImageAspectFlagBits::eColor);
-    device.endSingleTimeCommands(commandBuffer);
-
-    device.copyBufferToImage(*stagingBuffer.getBuffer(), *m_Image->getImage(), static_cast<uint32_t>(m_texWidth), static_cast<uint32_t>(m_texHeight));
-
-    generateMipmaps();
-
-    m_Sampler = device.getDefaultSampler();
+Texture::Texture(const VulkanDevice& device, uint32_t width, uint32_t height, const void* pixels)
+    : m_device(device), m_FilePath(""), m_texWidth(width), m_texHeight(height), m_mipLevels(1)
+{
+    vk::DeviceSize imageSize = width * height * 4;
+    createVulkanImage(pixels, imageSize);
 }
 
 Texture::~Texture()
 {
+}
+
+void Texture::createVulkanImage(const void* pixels, vk::DeviceSize imageSize)
+{
+    VulkanBuffer stagingBuffer(m_device, imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+    stagingBuffer.upload(pixels, imageSize);
+
+    m_Image.emplace(m_device, m_texWidth, m_texHeight, m_mipLevels, vk::SampleCountFlagBits::e1, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor);
+
+    auto commandBuffer = m_device.beginSingleTimeCommands();
+    m_device.transitionImageLayout(commandBuffer, m_Image->getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, m_mipLevels, vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eTransfer, {}, vk::AccessFlagBits2::eTransferWrite, vk::ImageAspectFlagBits::eColor);
+    m_device.endSingleTimeCommands(commandBuffer);
+
+    m_device.copyBufferToImage(*stagingBuffer.getBuffer(), *m_Image->getImage(), static_cast<uint32_t>(m_texWidth), static_cast<uint32_t>(m_texHeight));
+
+    generateMipmaps();
+
+    m_Sampler = m_device.getDefaultSampler();
 }
 
 void Texture::generateMipmaps()

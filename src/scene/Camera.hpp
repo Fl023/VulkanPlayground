@@ -4,8 +4,10 @@
 class Camera
 {
 public:
-	Camera();
+	Camera(const std::string& name = "default");
 	~Camera() = default;
+
+	enum class ProjectionType { Perspective = 0, Orthographic = 1 };
 
 	void SetPerspective(float verticalFOV, float aspectRatio, float nearClip, float farClip);
 	void SetOrthographic(float size, float nearClip, float farClip);
@@ -16,15 +18,29 @@ public:
 	const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
 	const glm::mat4& GetViewProjectionMatrix() const { return m_ViewProjectionMatrix; }
 
-	// The view matrix is calculated based on an external transform (from a TransformComponent)
+	float GetPerspectiveVerticalFOV() const { return m_PerspectiveFOV; }
+	float GetOrthographicSize() const { return m_OrthographicSize; }
+	float GetAspectRatio() const { return m_AspectRatio; }
+	float GetNearClip() const { return m_NearClip; }
+	float GetFarClip() const { return m_FarClip; }
+
+	ProjectionType GetProjectionType() const { return m_ProjectionType; }
+	void SetProjectionType(ProjectionType type) {
+		m_ProjectionType = type;
+		RecalculateProjection();
+	}
+
 	void RecalculateViewMatrix(const glm::mat4& transform);
+
+	
 
 private:
 	void RecalculateProjection();
 
 private:
+	std::string m_Name;
 	// Projection properties
-	enum class ProjectionType { Perspective = 0, Orthographic = 1 };
+	
 	ProjectionType m_ProjectionType = ProjectionType::Perspective;
 	
 	float m_PerspectiveFOV = glm::radians(45.0f);

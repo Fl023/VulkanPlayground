@@ -1,6 +1,6 @@
 #include "Camera.hpp"
 
-Camera::Camera()
+Camera::Camera(const std::string& name) : m_Name(name)
 {
 	RecalculateProjection();
 }

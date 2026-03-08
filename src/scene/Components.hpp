@@ -44,7 +44,7 @@ struct MaterialComponent {
 };
 
 struct CameraComponent {
-    Camera SceneCamera; // Deine neue Klasse
+    Camera SceneCamera;
     bool Primary = true;
     bool FixedAspectRatio = false;
 

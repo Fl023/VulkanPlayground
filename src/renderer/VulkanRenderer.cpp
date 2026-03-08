@@ -132,7 +132,7 @@ void VulkanRenderer::beginUI()
     imGuiLayer->beginFrame();
 }
 
-std::shared_ptr<Material> VulkanRenderer::createMaterial(std::shared_ptr<Texture> texture)
+std::shared_ptr<Material> VulkanRenderer::createMaterial(const std::string& name, std::shared_ptr<Texture> texture)
 {
     vk::raii::DescriptorSet set = materialAllocator.allocate(graphicsPipeline.getMaterialDescriptorSetLayout());
 
@@ -149,7 +149,25 @@ std::shared_ptr<Material> VulkanRenderer::createMaterial(std::shared_ptr<Texture
 
     device.getDevice().updateDescriptorSets(descriptorWrite, {});
 
-    return std::make_shared<Material>(texture, std::move(set));
+    return std::make_shared<Material>(name, texture, std::move(set));
+}
+
+void VulkanRenderer::UpdateMaterialTexture(std::shared_ptr<Material> material, std::shared_ptr<Texture> newTexture)
+{
+    material->SetTexture(newTexture);
+
+    vk::DescriptorImageInfo imageInfo = newTexture->GetDescriptorInfo();
+
+    vk::WriteDescriptorSet descriptorWrite{
+        .dstSet = *material->getDescriptorSet(),
+        .dstBinding = 0,
+        .dstArrayElement = 0,
+        .descriptorCount = 1,
+        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+        .pImageInfo = &imageInfo
+    };
+
+    device.getDevice().updateDescriptorSets(descriptorWrite, {});
 }
 
 void VulkanRenderer::createSyncObjects()
@@ -223,8 +241,6 @@ void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, Scene& scene) {
 
     memcpy(frames[currentImage].uniformBuffer->getMappedData(), &ubo, sizeof(ubo));
 }
-
-
 
 void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
     auto& commandBuffer = frames[frameIndex].commandBuffer;
@@ -323,14 +339,13 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
     vk::Rect2D scissor({ 0, 0 }, swapChain.getExtent());
     commandBuffer.setScissor(0, scissor);
 
-    auto view = scene.m_Registry.view<MeshComponent, TransformComponent, MaterialComponent>();
+    auto view = scene.m_Registry.view<MeshComponent, TransformComponent>();
 
     vk::DescriptorSet lastBoundMaterialSet = nullptr;
 
     for (auto entity : view) {
         auto& meshComp = view.get<MeshComponent>(entity);
         auto& transformComp = view.get<TransformComponent>(entity);
-        auto& matComp = view.get<MaterialComponent>(entity);
 
         if (meshComp.MeshAsset) {
             glm::mat4 modelMatrix = transformComp.GetTransform();
@@ -343,19 +358,23 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
                 modelMatrix
             );
 
-            if (matComp.materialAsset) {
-                vk::DescriptorSet currentSet = *matComp.materialAsset->getDescriptorSet();
-
-                if (currentSet != lastBoundMaterialSet) {
-                    commandBuffer.bindDescriptorSets(
-                        vk::PipelineBindPoint::eGraphics,
-                        graphicsPipeline.getPipelineLayout(),
-                        1,
-                        currentSet,
-                        {}
-                    );
-                    lastBoundMaterialSet = currentSet; // Zustand merken
+            vk::DescriptorSet currentSet = *m_DefaultMaterial->getDescriptorSet();
+            if (scene.m_Registry.all_of<MaterialComponent>(entity)) {
+                auto& matComp = scene.m_Registry.get<MaterialComponent>(entity);
+                if (matComp.materialAsset) {
+                    currentSet = *matComp.materialAsset->getDescriptorSet();
                 }
+            }
+
+            if (currentSet != lastBoundMaterialSet) {
+                commandBuffer.bindDescriptorSets(
+                    vk::PipelineBindPoint::eGraphics,
+                    graphicsPipeline.getPipelineLayout(),
+                    1,
+                    currentSet,
+                    {}
+                );
+                lastBoundMaterialSet = currentSet; // Zustand merken
             }
 
             // Bind Vertex & Index Buffer
@@ -365,6 +384,19 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
             commandBuffer.drawIndexed(meshComp.MeshAsset->getIndexCount(), 1, 0, 0, 0);
         }
     }
+    commandBuffer.endRendering();
+
+    colorAttachment.loadOp = vk::AttachmentLoadOp::eLoad;
+
+    vk::RenderingInfo imGuiRenderingInfo = {
+        .renderArea = {.offset = { 0, 0 }, .extent = swapChain.getExtent()},
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachment,
+        .pDepthAttachment = nullptr
+    };
+
+    commandBuffer.beginRendering(imGuiRenderingInfo);
 
     imGuiLayer->recordImGuiCommands(commandBuffer);
 
