@@ -63,6 +63,7 @@ void ImGuiLayer::beginFrame()
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+	ImGuizmo::BeginFrame();
 }
 
 void ImGuiLayer::recordImGuiCommands(const vk::raii::CommandBuffer& commandBuffer)

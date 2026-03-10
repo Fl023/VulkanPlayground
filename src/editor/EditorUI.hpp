@@ -15,6 +15,6 @@ public:
     void Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer);
 
 private:
-    // Die Auswahl-Variable zieht aus der main.cpp hierher um!
     Entity m_SelectedEntity; 
+    int m_GizmoType = ImGuizmo::TRANSLATE;
 };
