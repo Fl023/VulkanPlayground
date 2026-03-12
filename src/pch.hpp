@@ -17,6 +17,7 @@
 #include <unordered_map>
 #include <cstdint>
 #include <random>
+#include <functional>
 
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_profiles.hpp>

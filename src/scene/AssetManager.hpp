@@ -45,7 +45,7 @@ public:
     const std::unordered_map<std::string, AssetHandle>& GetMeshRegistry() const { return m_MeshRegistry; }
 
 
-    void RemoveTexture(const std::string& name);
+    void RemoveTexture(VulkanRenderer& renderer, const std::string& name);
     void RemoveMaterial(const std::string& name);
 	void RemoveMesh(const std::string& name);
     void Clear();

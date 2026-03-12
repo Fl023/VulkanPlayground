@@ -104,7 +104,7 @@ void ContentBrowserPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
             Texture* tex = assetManager.GetTexture(textureToDelete);
             if (tex) renderer.FreeBindlessIndex(tex->GetBindlessIndex());
 
-            assetManager.RemoveTexture(textureToDelete);
+            assetManager.RemoveTexture(renderer, textureToDelete);
         }
 
         ImGui::Spacing();

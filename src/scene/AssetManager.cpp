@@ -124,23 +124,34 @@ AssetHandle AssetManager::GetMeshHandle(const std::string& name) const
     return it != m_MeshRegistry.end() ? it->second : INVALID_ASSET_HANDLE;
 }
 
-void AssetManager::RemoveTexture(const std::string& name)
+void AssetManager::RemoveTexture(VulkanRenderer& renderer, const std::string& name)
 {
     auto it = m_TextureRegistry.find(name);
     if (it != m_TextureRegistry.end()) {
         AssetHandle handleToDelete = it->second;
 
-        // 1. Destroy the Vulkan memory by erasing the unique_ptr from the Vault
-        m_Textures.erase(handleToDelete);
+        // 1. EXTRACT the node from the map without destroying the unique_ptr
+        auto textureNode = m_Textures.extract(handleToDelete);
 
-        // 2. Erase every name alias in the registry that pointed to this handle
+        if (!textureNode.empty()) {
+            // 2. Take ownership and convert to shared_ptr JUST for the queue!
+            std::shared_ptr<Texture> texToKill = std::move(textureNode.mapped());
+            uint32_t bindlessIndex = texToKill->GetBindlessIndex();
+
+            // 3. Pass the shared_ptr into the lambda by value
+            renderer.SubmitToDeletionQueue([tex = texToKill, bindlessIndex, &renderer]() {
+
+                // Free the bindless slot for future textures
+                renderer.FreeBindlessIndex(bindlessIndex);
+
+                // The lambda dies, the shared_ptr drops to 0, and the texture is destroyed!
+                });
+        }
+
+        // 4. Clean up the string registries exactly as you did before
         for (auto regIt = m_TextureRegistry.begin(); regIt != m_TextureRegistry.end(); ) {
-            if (regIt->second == handleToDelete) {
-                regIt = m_TextureRegistry.erase(regIt);
-            }
-            else {
-                ++regIt;
-            }
+            if (regIt->second == handleToDelete) regIt = m_TextureRegistry.erase(regIt);
+            else ++regIt;
         }
     }
 }

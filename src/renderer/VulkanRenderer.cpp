@@ -56,6 +56,11 @@ void VulkanRenderer::drawFrame(Scene& scene, AssetManager& assetManager)
         throw std::runtime_error("failed to wait for fence!");
     }
 
+    for (auto& func : m_DeletionQueues[frameIndex]) {
+        func(); // Execute the lambda (this destroys the VRAM)
+    }
+    m_DeletionQueues[frameIndex].clear();
+
     // 2. Acquire an image from the swap chain
     vk::Semaphore acquireSemaphore = *frames[frameIndex].presentCompleteSemaphore;
     auto [result, imageIndex] = swapChain.getSwapChain().acquireNextImage(UINT64_MAX, acquireSemaphore, nullptr);
@@ -171,6 +176,11 @@ void VulkanRenderer::AddTextureToBindlessArray(Texture* texture)
 void VulkanRenderer::FreeBindlessIndex(uint32_t index)
 {
     m_FreeTextureIndices.push_back(index);
+}
+
+void VulkanRenderer::SubmitToDeletionQueue(std::function<void()>&& function)
+{
+    m_DeletionQueues[frameIndex].push_back(std::move(function));
 }
 
 void VulkanRenderer::createSyncObjects()

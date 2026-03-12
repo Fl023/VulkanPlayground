@@ -29,6 +29,8 @@ public:
     void AddTextureToBindlessArray(Texture* texture);
     void FreeBindlessIndex(uint32_t index);
 
+    void SubmitToDeletionQueue(std::function<void()>&& function);
+
     // Public variable accessed by the Window callback
     bool framebufferResized = false;
 
@@ -72,4 +74,6 @@ private:
     uint32_t currentTextureIndex = 0;
     std::unique_ptr<Texture> m_DefaultTexture;
     std::unique_ptr<ImGuiLayer> imGuiLayer;
+
+    std::vector<std::function<void()>> m_DeletionQueues[MAX_FRAMES_IN_FLIGHT];
 };
