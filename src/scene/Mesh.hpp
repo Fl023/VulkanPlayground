@@ -15,8 +15,8 @@ public:
 
 private:
     std::string m_Name;
-    std::unique_ptr<VulkanBuffer> m_VertexBuffer;
-    std::unique_ptr<VulkanBuffer> m_IndexBuffer;
+    std::optional<VulkanBuffer> m_VertexBuffer;
+    std::optional<VulkanBuffer> m_IndexBuffer;
     uint32_t m_VertexCount;
     uint32_t m_IndexCount;
 };

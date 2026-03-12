@@ -6,8 +6,7 @@ VulkanRenderer::VulkanRenderer(VulkanWindow& window)
       context(),
       device(context, window),
       swapChain(device, window),
-      graphicsPipeline(device, swapChain),
-      materialAllocator(device.getDevice(), 1000, { {vk::DescriptorType::eCombinedImageSampler, 1} })
+      graphicsPipeline(device, swapChain)
 {
     window.setUserPointer(this);
 
@@ -18,6 +17,9 @@ VulkanRenderer::VulkanRenderer(VulkanWindow& window)
     {
         frames.emplace_back(device, graphicsPipeline.getGlobalDescriptorSetLayout(), uboSize);
     }
+
+    createBindlessDescriptorSet();
+    createDefaultTexture();
 
     createColorResources();
     createDepthResources();
@@ -45,7 +47,7 @@ const VulkanWindow& VulkanRenderer::getWindow() const
     return window;
 }
 
-void VulkanRenderer::drawFrame(Scene& scene)
+void VulkanRenderer::drawFrame(Scene& scene, AssetManager& assetManager)
 {
     // 1. Wait for the previous frame to finish
     auto fenceResult = device.getDevice().waitForFences(*frames[frameIndex].inFlightFence, vk::True, UINT64_MAX);
@@ -76,7 +78,7 @@ void VulkanRenderer::drawFrame(Scene& scene)
 
     // 3. Record commands
     frames[frameIndex].commandBuffer.reset();
-    recordCommandBuffer(imageIndex, scene);
+    recordCommandBuffer(imageIndex, scene, assetManager);
 
     // 4. Submit the recorded command buffer
     vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
@@ -132,42 +134,43 @@ void VulkanRenderer::beginUI()
     imGuiLayer->beginFrame();
 }
 
-std::shared_ptr<Material> VulkanRenderer::createMaterial(const std::string& name, std::shared_ptr<Texture> texture)
+void VulkanRenderer::AddTextureToBindlessArray(Texture* texture)
 {
-    vk::raii::DescriptorSet set = materialAllocator.allocate(graphicsPipeline.getMaterialDescriptorSetLayout());
+    uint32_t indexToUse;
 
+    // 1. Check the free list first
+    if (!m_FreeTextureIndices.empty()) {
+        indexToUse = m_FreeTextureIndices.back();
+        m_FreeTextureIndices.pop_back();
+    }
+    // 2. Otherwise, allocate a new one at the end
+    else {
+        if (currentTextureIndex >= MAX_BINDLESS_TEXTURES) {
+            throw std::runtime_error("Exceeded maximum bindless textures!");
+        }
+        indexToUse = currentTextureIndex++;
+    }
+
+    // 3. Give the index to the Texture
+    texture->SetBindlessIndex(indexToUse);
+
+    // 4. Update the Vulkan array
     vk::DescriptorImageInfo imageInfo = texture->GetDescriptorInfo();
-
     vk::WriteDescriptorSet descriptorWrite{
-        .dstSet = *set,
-        .dstBinding = 0, // Binding 0 in Set 1
-        .dstArrayElement = 0,
+        .dstSet = *bindlessDescriptorSet,
+        .dstBinding = 0,
+        .dstArrayElement = indexToUse,
         .descriptorCount = 1,
         .descriptorType = vk::DescriptorType::eCombinedImageSampler,
         .pImageInfo = &imageInfo
     };
 
     device.getDevice().updateDescriptorSets(descriptorWrite, {});
-
-    return std::make_shared<Material>(name, texture, std::move(set));
 }
 
-void VulkanRenderer::UpdateMaterialTexture(std::shared_ptr<Material> material, std::shared_ptr<Texture> newTexture)
+void VulkanRenderer::FreeBindlessIndex(uint32_t index)
 {
-    material->SetTexture(newTexture);
-
-    vk::DescriptorImageInfo imageInfo = newTexture->GetDescriptorInfo();
-
-    vk::WriteDescriptorSet descriptorWrite{
-        .dstSet = *material->getDescriptorSet(),
-        .dstBinding = 0,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
-        .pImageInfo = &imageInfo
-    };
-
-    device.getDevice().updateDescriptorSets(descriptorWrite, {});
+    m_FreeTextureIndices.push_back(index);
 }
 
 void VulkanRenderer::createSyncObjects()
@@ -242,7 +245,7 @@ void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, Scene& scene) {
     memcpy(frames[currentImage].uniformBuffer->getMappedData(), &ubo, sizeof(ubo));
 }
 
-void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
+void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, AssetManager& assetManager) {
     auto& commandBuffer = frames[frameIndex].commandBuffer;
     
     // Begin command buffer
@@ -324,11 +327,17 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
     commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getGraphicsPipeline());
 
     // Bind Descriptor Sets
+    // Set 0 = Camera (UBO), Set 1 = Global Bindless Array
+    std::array<vk::DescriptorSet, 2> setsToBind = {
+        *frames[frameIndex].cameraSet,
+        *bindlessDescriptorSet
+    };
+
     commandBuffer.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         graphicsPipeline.getPipelineLayout(),
-        0,
-        *frames[frameIndex].cameraSet,
+        0, // First set being bound is Set 0
+        setsToBind,
         {}
     );
 
@@ -341,47 +350,60 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
 
     auto view = scene.m_Registry.view<MeshComponent, TransformComponent>();
 
-    vk::DescriptorSet lastBoundMaterialSet = nullptr;
-
     for (auto entity : view) {
         auto& meshComp = view.get<MeshComponent>(entity);
         auto& transformComp = view.get<TransformComponent>(entity);
 
-        if (meshComp.MeshAsset) {
-            glm::mat4 modelMatrix = transformComp.GetTransform();
+        // 1. Check if the entity actually has a valid Mesh ticket
+        if (meshComp.MeshHandle != INVALID_ASSET_HANDLE) {
 
-            // Send push constant to gpu
-            commandBuffer.pushConstants<glm::mat4>(
-                graphicsPipeline.getPipelineLayout(),
-                vk::ShaderStageFlagBits::eVertex,
-                0,
-                modelMatrix
-            );
+            // 2. Ask the Vault for the actual Mesh memory
+            Mesh* mesh = assetManager.GetMesh(meshComp.MeshHandle);
 
-            vk::DescriptorSet currentSet = *m_DefaultMaterial->getDescriptorSet();
-            if (scene.m_Registry.all_of<MaterialComponent>(entity)) {
-                auto& matComp = scene.m_Registry.get<MaterialComponent>(entity);
-                if (matComp.materialAsset) {
-                    currentSet = *matComp.materialAsset->getDescriptorSet();
+            // 3. Make sure the mesh actually exists (in case it was deleted!)
+            if (mesh) {
+
+                // Default to Slot 0 (the guaranteed 1x1 white pixel we setup earlier)
+                uint32_t texIndex = 0;
+
+                // 4. Resolve the Material and Texture
+                if (scene.m_Registry.all_of<MaterialComponent>(entity)) {
+                    auto& matComp = scene.m_Registry.get<MaterialComponent>(entity);
+
+                    if (matComp.MaterialHandle != INVALID_ASSET_HANDLE) {
+                        Material* material = assetManager.GetMaterial(matComp.MaterialHandle);
+
+                        // If the material exists, and it has a texture assigned to it...
+                        if (material && material->GetTextureHandle() != INVALID_ASSET_HANDLE) {
+                            Texture* albedo = assetManager.GetTexture(material->GetTextureHandle());
+
+                            // If the texture wasn't deleted, grab its bindless slot!
+                            if (albedo) {
+                                texIndex = albedo->GetBindlessIndex();
+                            }
+                        }
+                    }
                 }
-            }
 
-            if (currentSet != lastBoundMaterialSet) {
-                commandBuffer.bindDescriptorSets(
-                    vk::PipelineBindPoint::eGraphics,
+                PushConstants pushData{
+                    .modelMatrix = transformComp.GetTransform(),
+                    .textureIndex = texIndex
+                };
+
+                // Send push constant to gpu
+                commandBuffer.pushConstants<PushConstants>(
                     graphicsPipeline.getPipelineLayout(),
-                    1,
-                    currentSet,
-                    {}
+                    vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+                    0,
+                    pushData
                 );
-                lastBoundMaterialSet = currentSet; // Zustand merken
+
+                // Bind Vertex & Index Buffer using our resolved 'mesh' pointer
+                commandBuffer.bindVertexBuffers(0, *mesh->getVertexBuffer(), { 0 });
+                commandBuffer.bindIndexBuffer(*mesh->getIndexBuffer(), 0, vk::IndexType::eUint16);
+
+                commandBuffer.drawIndexed(mesh->getIndexCount(), 1, 0, 0, 0);
             }
-
-            // Bind Vertex & Index Buffer
-            commandBuffer.bindVertexBuffers(0, *meshComp.MeshAsset->getVertexBuffer(), { 0 });
-            commandBuffer.bindIndexBuffer(*meshComp.MeshAsset->getIndexBuffer(), 0, vk::IndexType::eUint16);
-
-            commandBuffer.drawIndexed(meshComp.MeshAsset->getIndexCount(), 1, 0, 0, 0);
         }
     }
     commandBuffer.endRendering();
@@ -416,4 +438,52 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene) {
 	);
 
     commandBuffer.end();
+}
+
+void VulkanRenderer::createBindlessDescriptorSet()
+{
+    // 1. Create a pool large enough for our single massive set
+    vk::DescriptorPoolSize poolSize{
+        .type = vk::DescriptorType::eCombinedImageSampler,
+        .descriptorCount = MAX_BINDLESS_TEXTURES
+    };
+
+    vk::DescriptorPoolCreateInfo poolInfo{
+        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet | vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind,
+        .maxSets = 1, // We only ever allocate ONE set
+        .poolSizeCount = 1,
+        .pPoolSizes = &poolSize
+    };
+
+    bindlessPool = vk::raii::DescriptorPool(device.getDevice(), poolInfo);
+
+    uint32_t variableDescCounts[] = { MAX_BINDLESS_TEXTURES };
+
+    vk::DescriptorSetVariableDescriptorCountAllocateInfo variableAllocInfo{
+        .descriptorSetCount = 1,
+        .pDescriptorCounts = variableDescCounts
+    };
+
+    // 2. Allocate the single global set
+    vk::DescriptorSetAllocateInfo allocInfo{
+        .pNext = &variableAllocInfo,
+        .descriptorPool = *bindlessPool,
+        .descriptorSetCount = 1,
+        .pSetLayouts = &*graphicsPipeline.getMaterialDescriptorSetLayout()
+    };
+
+    bindlessDescriptorSet = std::move(device.getDevice().allocateDescriptorSets(allocInfo).front());
+}
+
+void VulkanRenderer::createDefaultTexture()
+{
+    // 1. Create a 1x1 white pixel in CPU memory (RGBA: 255, 255, 255, 255)
+    uint32_t whitePixel = 0xFFFFFFFF;
+
+    // 2. Construct the texture directly using our unique_ptr
+    m_DefaultTexture = std::make_unique<Texture>(device, 1, 1, &whitePixel);
+
+    // 3. Add it to the bindless array using the raw pointer
+    // Since it is the very first texture, it gets Slot 0!
+    AddTextureToBindlessArray(m_DefaultTexture.get());
 }

@@ -4,6 +4,8 @@
 #include "scene/Entity.hpp"
 #include "scene/AssetManager.hpp"
 #include "renderer/VulkanRenderer.hpp"
+#include "SceneHierarchyPanel.hpp"
+#include "ContentBrowserPanel.hpp"
 
 class EditorUI
 {
@@ -15,6 +17,8 @@ public:
     void Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer);
 
 private:
-    Entity m_SelectedEntity; 
+    SceneHierarchyPanel m_SceneHierarchyPanel;
+    ContentBrowserPanel m_ContentBrowserPanel;
+    Scene* m_CurrentScene = nullptr;
     int m_GizmoType = ImGuizmo::TRANSLATE;
 };

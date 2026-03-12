@@ -10,6 +10,7 @@
 #include "scene/Mesh.hpp"
 #include "scene/Scene.hpp"
 #include "scene/Components.hpp"
+#include "scene/AssetManager.hpp"
 #include "ImGuiLayer.hpp"
 
 class VulkanRenderer
@@ -22,12 +23,11 @@ public:
 	const VulkanDevice& getDevice() const { return device; }
     const VulkanWindow& getWindow() const;
 
-    void drawFrame(Scene& scene);
+    void drawFrame(Scene& scene, AssetManager& assetManager);
     void beginUI();
 
-    std::shared_ptr<Material> createMaterial(const std::string& name, std::shared_ptr<Texture> texture);
-    void SetDefaultMaterial(std::shared_ptr<Material> material) { m_DefaultMaterial = material; }
-    void UpdateMaterialTexture(std::shared_ptr<Material> material, std::shared_ptr<Texture> newTexture);
+    void AddTextureToBindlessArray(Texture* texture);
+    void FreeBindlessIndex(uint32_t index);
 
     // Public variable accessed by the Window callback
     bool framebufferResized = false;
@@ -43,7 +43,11 @@ private:
 
     void updateUniformBuffer(uint32_t currentImage, Scene& scene);
 
-    void recordCommandBuffer(uint32_t imageIndex, Scene& scene);
+    void recordCommandBuffer(uint32_t imageIndex, Scene& scene, AssetManager& assetManager);
+
+    void createBindlessDescriptorSet();
+
+    void createDefaultTexture();
 
 private:
     VulkanWindow&  window;
@@ -60,7 +64,12 @@ private:
 
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
 
-    DescriptorAllocator materialAllocator;
-    std::shared_ptr<Material> m_DefaultMaterial;
+    vk::raii::DescriptorPool bindlessPool = nullptr;
+    vk::raii::DescriptorSet bindlessDescriptorSet = nullptr;
+
+    static constexpr uint32_t MAX_BINDLESS_TEXTURES = 1000;
+    std::vector<uint32_t> m_FreeTextureIndices;
+    uint32_t currentTextureIndex = 0;
+    std::unique_ptr<Texture> m_DefaultTexture;
     std::unique_ptr<ImGuiLayer> imGuiLayer;
 };

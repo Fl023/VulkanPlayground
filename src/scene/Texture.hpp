@@ -16,6 +16,9 @@ public:
 
     const std::string& GetFilePath() const { return m_FilePath; }
 
+    void SetBindlessIndex(uint32_t index) { m_BindlessIndex = index; }
+    uint32_t GetBindlessIndex() const { return m_BindlessIndex; }
+
 private:
     void generateMipmaps();
 
@@ -28,4 +31,5 @@ private:
     uint32_t m_mipLevels;
     int m_texWidth, m_texHeight;
     vk::Sampler m_Sampler;
+    uint32_t m_BindlessIndex = 0;
 };

@@ -1,96 +1,67 @@
 #pragma once
 
-#include "Texture.hpp"
-#include "Material.hpp"
-#include "Mesh.hpp"
+#include "AssetHandle.hpp"
+
+class Texture;
+class Material;
+class Mesh;
+class VulkanRenderer;
+
 
 class AssetManager
 {
 public:
     AssetManager() = default;
+    ~AssetManager();
 
-    ~AssetManager() { Clear(); }
+    // ==========================================
+    // CREATION & LOADING
+    // ==========================================
 
-    std::shared_ptr<Texture> GetTexture(const std::string& name) const
-    {
-        auto it = m_Textures.find(name);
-        if (it != m_Textures.end()) {
-            return it->second;
-        }
-        return nullptr; // (Oder du gibst hier deine weiße Default-Textur zurück!)
-    }
+    AssetHandle LoadOrCreateTexture(VulkanRenderer& renderer, const std::string& name, const std::string& filepath);
 
-    std::shared_ptr<Texture> LoadTexture(const VulkanDevice& device, const std::string& name, const std::string& filepath)
-    {
-        // Warnung, falls der Name schon existiert (Optional, aber gut für's Debugging)
-        if (m_Textures.find(name) != m_Textures.end()) {
-            std::cerr << "Warning: Texture name '" << name << "' already exists! Returning existing texture.\n";
-            return m_Textures[name];
-        }
+    AssetHandle CreateMaterial(const std::string& name, AssetHandle albedoHandle);
 
-        // Deduplizierung: Prüfen, ob GENAU DIESE DATEI schon im VRAM ist
-        for (const auto& [existingName, existingTexture] : m_Textures) {
-            // Wir prüfen nur Texturen, die auch wirklich einen Pfad haben
-            if (!existingTexture->GetFilePath().empty() && existingTexture->GetFilePath() == filepath) {
-                m_Textures[name] = existingTexture; // Alias unter neuem Namen anlegen
-                return existingTexture;
-            }
-        }
+    AssetHandle AddMesh(const std::string& name, std::unique_ptr<Mesh> mesh);
 
-        // Komplett neu von der Festplatte laden
-        auto texture = std::make_shared<Texture>(device, filepath);
-        m_Textures[name] = texture;
-        return texture;
-    }
+    Texture* GetTexture(AssetHandle handle) const;
 
-    std::string GetTextureName(std::shared_ptr<Texture> texture) const
-    {
-        if (!texture) return "None";
+    Texture* GetTexture(const std::string& name) const;
 
-        for (const auto& [name, tex] : m_Textures) {
-            if (tex == texture) {
-                return name;
-            }
-        }
-        return "Unknown";
-    }
+    Material* GetMaterial(AssetHandle handle) const;
 
-    void AddTexture(const std::string& name, std::shared_ptr<Texture> texture)
-    {
-        m_Textures[name] = texture;
-    }
+    Material* GetMaterial(const std::string& name) const;
 
-    void AddMaterial(const std::string& name, std::shared_ptr<Material> material)
-    {
-        m_Materials[name] = material;
-    }
+    Mesh* GetMesh(AssetHandle handle) const;
 
-    void AddMesh(const std::string& name, std::shared_ptr<Mesh> mesh)
-    {
-        m_Meshes[name] = mesh;
-    }
+    Mesh* GetMesh(const std::string& name) const;
 
-    void RemoveTexture(const std::string& name) {
-        m_Textures.erase(name);
-    }
+    AssetHandle GetTextureHandle(const std::string& name) const;
+	AssetHandle GetMaterialHandle(const std::string& name) const;
+	AssetHandle GetMeshHandle(const std::string& name) const;
 
-    void RemoveMaterial(const std::string& name) {
-        m_Materials.erase(name);
-    }
+    const std::unordered_map<std::string, AssetHandle>& GetTextureRegistry() const { return m_TextureRegistry; }
+    const std::unordered_map<std::string, AssetHandle>& GetMaterialRegistry() const { return m_MaterialRegistry; }
+    const std::unordered_map<std::string, AssetHandle>& GetMeshRegistry() const { return m_MeshRegistry; }
 
-    const std::unordered_map<std::string, std::shared_ptr<Texture>>& GetTextures() const { return m_Textures; }
-    const std::unordered_map<std::string, std::shared_ptr<Material>>& GetMaterials() const { return m_Materials; }
-    const std::unordered_map<std::string, std::shared_ptr<Mesh>>& GetMeshes() const { return m_Meshes; }
 
-    void Clear()
-    {
-        m_Materials.clear();
-        m_Meshes.clear();
-        m_Textures.clear();
-    }
+    void RemoveTexture(const std::string& name);
+    void RemoveMaterial(const std::string& name);
+	void RemoveMesh(const std::string& name);
+    void Clear();
 
 private:
-    std::unordered_map<std::string, std::shared_ptr<Texture>> m_Textures;
-    std::unordered_map<std::string, std::shared_ptr<Material>> m_Materials;
-    std::unordered_map<std::string, std::shared_ptr<Mesh>> m_Meshes;
+    // Generates a robust, guaranteed non-zero UUID
+    AssetHandle GenerateHandle();
+
+private:
+    // --- THE VAULTS (Actual Memory Ownership) ---
+    std::unordered_map<AssetHandle, std::unique_ptr<Texture>> m_Textures;
+    std::unordered_map<AssetHandle, std::unique_ptr<Material>> m_Materials;
+    std::unordered_map<AssetHandle, std::unique_ptr<Mesh>> m_Meshes;
+
+    // --- THE REGISTRIES (String to Handle mapping) ---
+    std::unordered_map<std::string, AssetHandle> m_TextureRegistry;
+    std::unordered_map<std::string, AssetHandle> m_MaterialRegistry;
+    std::unordered_map<std::string, AssetHandle> m_MeshRegistry;
 };

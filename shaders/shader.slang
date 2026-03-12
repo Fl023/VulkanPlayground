@@ -20,6 +20,7 @@ ConstantBuffer<UniformBuffer> ubo;
 // ==========================================
 struct PushConstants {
     float4x4 model;
+    uint textureIndex;
 };
 
 [[vk::push_constant]] 
@@ -47,10 +48,12 @@ VSOutput vertMain(VSInput input) {
 // SET 1: MATERIAL DATEN (Pro Material)
 // ==========================================
 [[vk::binding(0, 1)]] // Binding 0, Set 1
-Sampler2D texture;
+Sampler2D bindlessTextures[1000];
 
 [shader("fragment")]
 float4 fragMain(VSOutput vertIn) : SV_TARGET {
-   // Wir sampeln die Textur und multiplizieren sie mit der Vertex-Farbe
-   return float4(vertIn.fragColor * texture.Sample(vertIn.fragTexCoord).rgb, 1.0);
+   // We wrap the index in NonUniformResourceIndex() to prevent GPU execution divergence issues.
+   float3 texColor = bindlessTextures[NonUniformResourceIndex(push.textureIndex)].Sample(vertIn.fragTexCoord).rgb;
+   
+   return float4(vertIn.fragColor * texColor, 1.0);
 }

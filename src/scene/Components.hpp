@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AssetHandle.hpp"
 #include "Mesh.hpp" 
 #include "Camera.hpp"
 #include "Texture.hpp"
@@ -30,17 +31,17 @@ struct TransformComponent {
 };
 
 struct MeshComponent {
-    std::shared_ptr<Mesh> MeshAsset;
+    AssetHandle MeshHandle = INVALID_ASSET_HANDLE;
 
     MeshComponent() = default;
-    MeshComponent(std::shared_ptr<Mesh> mesh) : MeshAsset(std::move(mesh)) {}
+    MeshComponent(AssetHandle handle) : MeshHandle(handle) {}
 };
 
 struct MaterialComponent {
-    std::shared_ptr<Material> materialAsset;
+    AssetHandle MaterialHandle = INVALID_ASSET_HANDLE;
 
     MaterialComponent() = default;
-    MaterialComponent(std::shared_ptr<Material> material) : materialAsset(material) {}
+    MaterialComponent(AssetHandle handle) : MaterialHandle(handle) {}
 };
 
 struct CameraComponent {

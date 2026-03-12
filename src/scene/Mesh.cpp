@@ -18,7 +18,7 @@ Mesh::Mesh(const VulkanDevice& device, const std::string& name, const std::vecto
 
     vertexStagingBuffer.upload(vertices.data(), vertexBufferSize);
 
-    m_VertexBuffer = std::make_unique<VulkanBuffer>(
+    m_VertexBuffer.emplace(
         device,
         vertexBufferSize,
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
@@ -37,7 +37,7 @@ Mesh::Mesh(const VulkanDevice& device, const std::string& name, const std::vecto
 
     indexStagingBuffer.upload(indices.data(), indexBufferSize);
 
-    m_IndexBuffer = std::make_unique<VulkanBuffer>(
+    m_IndexBuffer.emplace(
         device,
         indexBufferSize,
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,

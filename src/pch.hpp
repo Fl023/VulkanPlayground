@@ -15,6 +15,8 @@
 #include <chrono>
 #include <array>
 #include <unordered_map>
+#include <cstdint>
+#include <random>
 
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_profiles.hpp>
@@ -30,4 +32,6 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_vulkan.h>
+#include <imgui_internal.h> 
+#include <imgui_stdlib.h>
 #include <ImGuizmo.h>

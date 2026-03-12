@@ -1,21 +1,19 @@
 #pragma once
-
-#include "Texture.hpp"
+#include "AssetHandle.hpp"
 
 class Material {
 public:
-    Material(const std::string& name, std::shared_ptr<Texture> albedo, vk::raii::DescriptorSet set)
-        : m_Name(name), albedoTexture(std::move(albedo)), descriptorSet(std::move(set)) {
+    Material(const std::string& name, AssetHandle albedoHandle = INVALID_ASSET_HANDLE)
+        : m_Name(name), m_AlbedoHandle(albedoHandle) {
     }
 
     const std::string& GetName() const { return m_Name; }
-    const vk::raii::DescriptorSet& getDescriptorSet() const { return descriptorSet; }
-    std::shared_ptr<Texture> getTexture() const { return albedoTexture; }
 
-    void SetTexture(std::shared_ptr<Texture> texture) { albedoTexture = std::move(texture); }
+    // Getters and Setters now just pass a 64-bit integer!
+    AssetHandle GetTextureHandle() const { return m_AlbedoHandle; }
+    void SetTextureHandle(AssetHandle handle) { m_AlbedoHandle = handle; }
 
 private:
     std::string m_Name;
-    std::shared_ptr<Texture> albedoTexture;
-    vk::raii::DescriptorSet descriptorSet;
+    AssetHandle m_AlbedoHandle = INVALID_ASSET_HANDLE;
 };

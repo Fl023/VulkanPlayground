@@ -3,6 +3,11 @@
 #include "VulkanDevice.hpp"
 #include "VulkanSwapChain.hpp"
 
+struct PushConstants {
+    glm::mat4 modelMatrix;
+    uint32_t textureIndex;
+};
+
 class VulkanGraphicsPipeline
 {
 public:

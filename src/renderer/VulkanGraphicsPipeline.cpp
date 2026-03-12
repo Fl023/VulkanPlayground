@@ -46,8 +46,26 @@ void VulkanGraphicsPipeline::createDescriptorSetLayout()
     globalSetLayout = vk::raii::DescriptorSetLayout(device.getDevice(), globalLayoutInfo);
 
     // 2. Layout für Set 1 (Material)
-    vk::DescriptorSetLayoutBinding materialBinding(0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
-    vk::DescriptorSetLayoutCreateInfo materialLayoutInfo{ .bindingCount = 1, .pBindings = &materialBinding };
+    constexpr uint32_t MAX_TEXTURES = 1000;
+    vk::DescriptorSetLayoutBinding materialBinding(0, vk::DescriptorType::eCombinedImageSampler, MAX_TEXTURES, vk::ShaderStageFlagBits::eFragment, nullptr);
+
+    vk::DescriptorBindingFlags bindlessFlags =
+        vk::DescriptorBindingFlagBits::ePartiallyBound |
+        vk::DescriptorBindingFlagBits::eUpdateAfterBind |
+        vk::DescriptorBindingFlagBits::eVariableDescriptorCount;
+
+    vk::DescriptorSetLayoutBindingFlagsCreateInfo extendedInfo{
+        .bindingCount = 1,
+        .pBindingFlags = &bindlessFlags
+    };
+
+    vk::DescriptorSetLayoutCreateInfo materialLayoutInfo{
+        .pNext = &extendedInfo, // Chain the flags
+        .flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool, // Important!
+        .bindingCount = 1,
+        .pBindings = &materialBinding
+    };    
+    
     materialSetLayout = vk::raii::DescriptorSetLayout(device.getDevice(), materialLayoutInfo);
 }
 
@@ -136,9 +154,9 @@ void VulkanGraphicsPipeline::createGraphicsPipeline()
     };
 
     vk::PushConstantRange pushConstantRange{
-        .stageFlags = vk::ShaderStageFlagBits::eVertex,
+        .stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
         .offset = 0,
-        .size = sizeof(glm::mat4) // 64 Bytes für deine Model-Matrix
+        .size = sizeof(PushConstants) // 64 Bytes für deine Model-Matrix
     };
 
     std::array<vk::DescriptorSetLayout, 2> layouts = { *globalSetLayout, *materialSetLayout };
