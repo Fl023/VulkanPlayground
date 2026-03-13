@@ -5,6 +5,33 @@
 
 void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer)
 {
+    // ==========================================
+    // 1. CREATE THE MAIN DOCKSPACE
+    // ==========================================
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->WorkPos);
+    ImGui::SetNextWindowSize(viewport->WorkSize);
+    ImGui::SetNextWindowViewport(viewport->ID);
+
+    // These flags make the window invisible, un-draggable, and un-resizable
+    ImGuiWindowFlags dockspace_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+
+    // Remove all padding and borders so it sits perfectly flush with the OS window
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+
+    ImGui::Begin("Main Editor Dockspace", nullptr, dockspace_flags);
+    ImGui::PopStyleVar(3); // Pop the styles immediately
+
+    // Submit the DockSpace API!
+    ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
+
+
     if (m_CurrentScene != &scene) {
         m_CurrentScene = &scene;
         m_SceneHierarchyPanel.SetContext(m_CurrentScene);
@@ -12,6 +39,38 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
 
     m_SceneHierarchyPanel.OnImGuiRender(assetManager, renderer);
     m_ContentBrowserPanel.OnImGuiRender(assetManager, renderer);
+
+    // ==========================================
+    // THE NEW VIEWPORT PANEL
+    // ==========================================
+    // Remove padding so the 3D scene touches the edges of the window
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{ 0, 0 });
+    ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+    // Get the exact screen coordinates where the image starts (below the title bar)
+    ImVec2 viewportOffset = ImGui::GetCursorPos();
+    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+
+    if (viewportSize.x > 0.0f && viewportSize.y > 0.0f) {
+        // Find your primary camera and UPDATE its projection matrix with the new panel size!
+        auto cameraViewReg = scene.m_Registry.view<CameraComponent>();
+        for (auto entityID : cameraViewReg) {
+            auto& camComp = cameraViewReg.get<CameraComponent>(entityID);
+            if (camComp.Primary) {
+                // We use your exact method here to fix the stretching!
+                camComp.SceneCamera.SetViewportSize(static_cast<uint32_t>(viewportSize.x), static_cast<uint32_t>(viewportSize.y));
+            }
+        }
+    }
+
+    // 1. Resize the Vulkan offscreen memory if the user resizes the panel
+    renderer.ResizeViewport(static_cast<uint32_t>(viewportSize.x), static_cast<uint32_t>(viewportSize.y));
+
+    ImTextureID textureID = reinterpret_cast<ImTextureID>(static_cast<VkDescriptorSet>(renderer.GetViewportTextureID()));
+    // 2. Draw the 3D Scene into the panel!
+    if (renderer.GetViewportTextureID()) {
+        ImGui::Image(textureID, viewportSize);
+    }
 
     // ==========================================
     // IMGUIZMO LOGIK
@@ -28,12 +87,15 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
     if (selectedEntity && selectedEntity.HasComponent<TransformComponent>()) {
 
         ImGuizmo::SetOrthographic(false);
-        // Da wir noch keinen eigenen Viewport haben, zeichnen wir über den gesamten Bildschirm
-        ImGuizmo::SetDrawlist(ImGui::GetForegroundDrawList());
+        
+        // NEW: Draw inside this specific window, not the whole screen!
+        ImGuizmo::SetDrawlist();
 
-        // Die Größe des aktuellen ImGui-Fensters (bzw. Bildschirms)
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImGuizmo::SetRect(viewport->Pos.x, viewport->Pos.y, viewport->Size.x, viewport->Size.y);
+        // NEW: Calculate the exact bounding box of the image on the monitor
+        ImVec2 windowPos = ImGui::GetWindowPos();
+        float rectX = windowPos.x + viewportOffset.x;
+        float rectY = windowPos.y + viewportOffset.y;
+        ImGuizmo::SetRect(rectX, rectY, viewportSize.x, viewportSize.y);
 
         // 1. Primäre Kamera finden und Matrizen holen
         glm::mat4 cameraView = glm::mat4(1.0f);
@@ -82,6 +144,7 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
                         glm::value_ptr(scale));
 
                     tc.Translation = translation;
+
                     // ImGuizmo gibt Rotation in Grad zurück, aber deine Component speichert Radiant
                     tc.Rotation = glm::radians(rotationDegrees);
                     tc.Scale = scale;
@@ -89,4 +152,9 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
             }
         }
     }
+
+    ImGui::End();
+	ImGui::PopStyleVar();
+
+    ImGui::End();
 }

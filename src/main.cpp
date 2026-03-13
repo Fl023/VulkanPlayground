@@ -11,7 +11,7 @@ class HelloTriangleApplication
 {
 public:
 	HelloTriangleApplication()
-		: mainWindow(1280, 720, "Vulkan Engine"),
+		: mainWindow(1920, 1080, "Vulkan Engine"),
 		renderer(mainWindow), mainCamera("Main Camera")
 	{
 		Input::Init(mainWindow.getNativeWindow());

@@ -26,6 +26,7 @@ VulkanRenderer::VulkanRenderer(VulkanWindow& window)
 
 	createSyncObjects();
     imGuiLayer = std::make_unique<ImGuiLayer>(device, swapChain);
+    m_ViewportTarget.emplace(device, window.getWidth(), window.getHeight(), swapChain.getSurfaceFormat().format);
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -240,7 +241,7 @@ void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, Scene& scene) {
 
         if (camComp.Primary) {
             // 1. Viewport an Swapchain anpassen
-            camComp.SceneCamera.SetViewportSize(swapChain.getExtent().width, swapChain.getExtent().height);
+            //camComp.SceneCamera.SetViewportSize(swapChain.getExtent().width, swapChain.getExtent().height);
 
             // 2. View-Matrix basierend auf dem Transform der Entity berechnen
             camComp.SceneCamera.RecalculateViewMatrix(transform.GetTransform());
@@ -262,40 +263,53 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
     vk::CommandBufferBeginInfo beginInfo{};
     commandBuffer.begin(beginInfo);
 
+    // We no longer render our 3D scene directly to the window (monitor). 
+    // We are rendering to an internal 1-sample offscreen image that ImGui will 
+    // later read and display inside the Editor Viewport panel.
+    // 'eTopOfPipe' was used because we had to wait for the OS to hand us the 
+    // swapchain image before doing anything. Since our new image lives purely in 
+    // our engine's VRAM, we don't need to halt the start of the GPU pipeline. We 
+    // only need it ready by the time the fragment shader outputs color.
     device.transitionImageLayout(
         commandBuffer,
-        swapChain.getImages()[imageIndex],
+        *m_ViewportTarget->GetResolveImage().getImage(), // swapChain.getImages()[imageIndex],
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
         1,
-        vk::PipelineStageFlagBits2::eTopOfPipe,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput, // vk::PipelineStageFlagBits2::eTopOfPipe,
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         {},
         vk::AccessFlagBits2::eColorAttachmentWrite,
         vk::ImageAspectFlagBits::eColor
 	);
 
+    // Because oldLayout is eUndefined, we are throwing away the old pixels. 
+    // Forcing the GPU to wait for previous writes to finish just to throw the data 
+    // away is an unnecessary performance penalty. eNone says "discard immediately."
     device.transitionImageLayout(
         commandBuffer,
-        colorImage->getImage(),
+        *m_ViewportTarget->GetColorImage().getImage(), // colorImage->getImage(),
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
         1,
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::AccessFlagBits2::eNone, // vk::AccessFlagBits2::eColorAttachmentWrite,
         vk::AccessFlagBits2::eColorAttachmentWrite,
         vk::ImageAspectFlagBits::eColor);
 
+    // Exactly the same optimization as the color image above. We are discarding 
+    // the old depth data (eUndefined), so waiting for old depth writes to finish is 
+    // a waste of GPU cycles. eNone removes the stall.
     device.transitionImageLayout(
         commandBuffer,
-        depthImage->getImage(),
+        *m_ViewportTarget->GetDepthImage().getImage(), // depthImage->getImage(),
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthAttachmentOptimal,
         1,
         vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
         vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::AccessFlagBits2::eNone, // vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
         vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
         vk::ImageAspectFlagBits::eDepth
     );
@@ -305,18 +319,18 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
     vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
     
     vk::RenderingAttachmentInfo colorAttachment = {
-        .imageView = colorImage->getImageView(),
+        .imageView = *m_ViewportTarget->GetColorImage().getImageView(), // colorImage->getImageView(),
         .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .resolveMode = vk::ResolveModeFlagBits::eAverage,
-        .resolveImageView = swapChain.getImageViews()[imageIndex],
+        .resolveImageView = *m_ViewportTarget->GetResolveImage().getImageView(), // swapChain.getImageViews()[imageIndex],
         .resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
         .clearValue = clearColor 
     };
 
-    vk::RenderingAttachmentInfo depthAttachmentInfo = {
-        .imageView = depthImage->getImageView(),
+    vk::RenderingAttachmentInfo depthAttachment = {
+        .imageView = *m_ViewportTarget->GetDepthImage().getImageView(), // depthImage->getImageView(),
         .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
@@ -324,11 +338,11 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
     };
 
     vk::RenderingInfo renderingInfo = {
-        .renderArea = {.offset = { 0, 0 }, .extent = swapChain.getExtent()},
+        .renderArea = { {0, 0}, {m_ViewportTarget->GetWidth(), m_ViewportTarget->GetHeight()} }, // {.offset = { 0, 0 }, .extent = swapChain.getExtent()},
         .layerCount = 1,
         .colorAttachmentCount = 1,
         .pColorAttachments = &colorAttachment,
-        .pDepthAttachment = &depthAttachmentInfo
+        .pDepthAttachment = &depthAttachment
     };
 
     commandBuffer.beginRendering(renderingInfo);
@@ -352,10 +366,12 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
     );
 
     // Dynamic State: Viewport & Scissor
-    vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
+    vk::Viewport viewport{ 0.0f, 0.0f, (float)m_ViewportTarget->GetWidth(), (float)m_ViewportTarget->GetHeight(), 0.0f, 1.0f };
+    // vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
     commandBuffer.setViewport(0, viewport);
 
-    vk::Rect2D scissor({ 0, 0 }, swapChain.getExtent());
+    vk::Rect2D scissor{ {0, 0}, {m_ViewportTarget->GetWidth(), m_ViewportTarget->GetHeight()} };
+    // vk::Rect2D scissor({ 0, 0 }, swapChain.getExtent());
     commandBuffer.setScissor(0, scissor);
 
     auto view = scene.m_Registry.view<MeshComponent, TransformComponent>();
@@ -418,17 +434,39 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
     }
     commandBuffer.endRendering();
 
-    colorAttachment.loadOp = vk::AttachmentLoadOp::eLoad;
+    // Transition the 1-sample Resolve Image so ImGui's Shader can read it!
+    device.transitionImageLayout(
+        commandBuffer, *m_ViewportTarget->GetResolveImage().getImage(),
+        vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 1,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eFragmentShader,
+        vk::AccessFlagBits2::eColorAttachmentWrite, vk::AccessFlagBits2::eShaderRead, vk::ImageAspectFlagBits::eColor
+    );
 
-    vk::RenderingInfo imGuiRenderingInfo = {
-        .renderArea = {.offset = { 0, 0 }, .extent = swapChain.getExtent()},
-        .layerCount = 1,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachment,
-        .pDepthAttachment = nullptr
+    // Transition the Swapchain image for drawing
+    device.transitionImageLayout(
+        commandBuffer, swapChain.getImages()[imageIndex],
+        vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal, 1,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eNone, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageAspectFlagBits::eColor
+    );
+
+    // 2. Setup Swapchain Dynamic Rendering
+    vk::RenderingAttachmentInfo swapchainAttachment{
+        .imageView = swapChain.getImageViews()[imageIndex],
+        .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
+        .loadOp = vk::AttachmentLoadOp::eClear,
+        .storeOp = vk::AttachmentStoreOp::eStore,
+        .clearValue = clearColor // UI Background (usually hidden by docking)
     };
 
-    commandBuffer.beginRendering(imGuiRenderingInfo);
+    vk::RenderingInfo swapchainRenderInfo{
+        .renderArea = { {0, 0}, swapChain.getExtent() },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &swapchainAttachment
+    };
+
+    commandBuffer.beginRendering(swapchainRenderInfo);
 
     imGuiLayer->recordImGuiCommands(commandBuffer);
 

@@ -43,7 +43,7 @@ ImGuiLayer::ImGuiLayer(const VulkanDevice& device, const VulkanSwapChain& swapCh
     uint32_t imageCount = static_cast<uint32_t>(swapChain.getImages().size());
     init_info.MinImageCount = imageCount; 
     init_info.ImageCount = imageCount;
-    init_info.MSAASamples = static_cast<VkSampleCountFlagBits>(device.getMsaaSamples());
+    init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT; // static_cast<VkSampleCountFlagBits>(device.getMsaaSamples());
 
     ImGui_ImplVulkan_Init(&init_info);
 }

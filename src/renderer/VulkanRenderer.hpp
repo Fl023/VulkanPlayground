@@ -7,6 +7,7 @@
 #include "VulkanVertex.hpp"
 #include "VulkanBuffer.hpp"
 #include "VulkanImage.hpp"
+#include "VulkanRenderTarget.hpp"
 #include "scene/Mesh.hpp"
 #include "scene/Scene.hpp"
 #include "scene/Components.hpp"
@@ -30,6 +31,9 @@ public:
     void FreeBindlessIndex(uint32_t index);
 
     void SubmitToDeletionQueue(std::function<void()>&& function);
+
+    vk::DescriptorSet GetViewportTextureID() const { return m_ViewportTarget->GetImGuiTextureID(); }
+    void ResizeViewport(uint32_t width, uint32_t height) { m_ViewportTarget->Resize(width, height); }
 
     // Public variable accessed by the Window callback
     bool framebufferResized = false;
@@ -74,6 +78,7 @@ private:
     uint32_t currentTextureIndex = 0;
     std::unique_ptr<Texture> m_DefaultTexture;
     std::unique_ptr<ImGuiLayer> imGuiLayer;
+    std::optional<RenderTarget> m_ViewportTarget;
 
     std::vector<std::function<void()>> m_DeletionQueues[MAX_FRAMES_IN_FLIGHT];
 };
