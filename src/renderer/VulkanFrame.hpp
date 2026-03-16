@@ -3,6 +3,7 @@
 #include "VulkanDevice.hpp"
 #include "VulkanBuffer.hpp"
 #include "VulkanDescriptorAllocator.hpp"
+#include "scene/AssetHandle.hpp"
 
 struct VulkanFrame {
 	// Command Resources
@@ -19,9 +20,14 @@ struct VulkanFrame {
 	// Descriptor Resources
     DescriptorAllocator frameAllocator;
 	vk::raii::DescriptorSet cameraSet = nullptr;
+    vk::raii::DescriptorSet skyboxSet = nullptr;
+    AssetHandle activeSkyboxHandle = INVALID_ASSET_HANDLE;
 
-	VulkanFrame(const VulkanDevice& device, const vk::raii::DescriptorSetLayout& layout, vk::DeviceSize uboSize)
-        : frameAllocator(device.getDevice(), 1, { vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1) })
+	VulkanFrame(const VulkanDevice& device, const vk::raii::DescriptorSetLayout& cameraLayout, const vk::raii::DescriptorSetLayout& skyboxLayout, vk::DeviceSize uboSize)
+        : frameAllocator(device.getDevice(), 2, {
+            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1),
+            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
+            })
 	{
         // 1. Command Pool & Buffer erstellen
         vk::CommandPoolCreateInfo poolInfo{
@@ -49,7 +55,8 @@ struct VulkanFrame {
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
         );
 
-        cameraSet = frameAllocator.allocate(layout);
+        cameraSet = frameAllocator.allocate(cameraLayout);
+        skyboxSet = frameAllocator.allocate(skyboxLayout);
 
         // 6. Das Set mit dem Buffer verknüpfen (Write Descriptor Set)
         vk::DescriptorBufferInfo bufferInfo{

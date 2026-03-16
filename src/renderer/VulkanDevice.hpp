@@ -12,7 +12,7 @@ public:
     void endSingleTimeCommands(vk::raii::CommandBuffer& commandBuffer) const;
 
     void copyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize size) const;
-    void copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height) const;
+    void copyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t width, uint32_t height, uint32_t layerCount = 1) const;
 
     uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) const;
 
@@ -26,7 +26,8 @@ public:
         vk::PipelineStageFlags2 dstStageMask,
         vk::AccessFlags2 srcAccessMask,
         vk::AccessFlags2 dstAccessMask,
-        vk::ImageAspectFlags imageAspectFlags) const;
+        vk::ImageAspectFlags imageAspectFlags,
+        uint32_t layerCount = 1) const;
 
     const VulkanContext& getContext() const;
     const vk::raii::Device& getDevice() const;

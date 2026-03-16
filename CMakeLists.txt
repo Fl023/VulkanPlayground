@@ -11,25 +11,37 @@ include_directories(${VULKAN_INCLUDE_DIR})
 
 find_program(SLANGC_EXECUTABLE slangc REQUIRED)
 
-function (add_slang_shader_target TARGET)
-  cmake_parse_arguments ("SHADER" "" "" "SOURCES" ${ARGN})
-  set (SHADERS_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
-  set (ENTRY_POINTS -entry vertMain -entry fragMain)
+function(add_slang_shader_target TARGET)
+    cmake_parse_arguments("SHADER" "" "" "SOURCES" ${ARGN})
+    set(SHADERS_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
   
-  add_custom_command (
-          OUTPUT ${SHADERS_DIR}
-          COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
-  )
-  
-    add_custom_command (
-        OUTPUT  ${SHADERS_DIR}/slang.spv
-        COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o slang.spv
-        WORKING_DIRECTORY ${SHADERS_DIR}
-        DEPENDS ${SHADER_SOURCES}
-        COMMENT "Compiling Slang Shaders: ${SHADER_SOURCES}"
-        VERBATIM
+    # Create the output directory once
+    add_custom_command(
+        OUTPUT ${SHADERS_DIR}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
     )
-  add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
+  
+    set(SPV_OUTPUTS "")
+    
+    # Loop over every .slang file provided
+    foreach(SLANG_SRC IN LISTS SHADER_SOURCES)
+        # Extract the base name (e.g., "skybox" from "skybox.slang")
+        get_filename_component(FILE_NAME ${SLANG_SRC} NAME_WE)
+        set(SPV_OUT ${SHADERS_DIR}/${FILE_NAME}.spv)
+        
+        add_custom_command(
+            OUTPUT ${SPV_OUT}
+            COMMAND ${SLANGC_EXECUTABLE} ${SLANG_SRC} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o ${SPV_OUT}
+            DEPENDS ${SLANG_SRC} ${SHADERS_DIR}
+            COMMENT "Compiling Slang Shader: ${FILE_NAME}.slang -> ${FILE_NAME}.spv"
+            VERBATIM
+        )
+        
+        list(APPEND SPV_OUTPUTS ${SPV_OUT})
+    endforeach()
+  
+    # The target depends on all generated .spv files
+    add_custom_target(${TARGET} ALL DEPENDS ${SPV_OUTPUTS})
 endfunction()
 
 find_package(glfw3 CONFIG REQUIRED)
@@ -45,7 +57,8 @@ file(GLOB_RECURSE ALL_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp"
 )
 
-set(SHADER_SLANG_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/shaders/shader.slang")
+# Automatically find ALL .slang files in the shaders directory
+file(GLOB SHADER_SLANG_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.slang")
 
 add_executable(${PROJECT_NAME} ${ALL_SOURCES})
 
@@ -55,7 +68,7 @@ source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "Source Files" FILES 
 
 target_include_directories(${PROJECT_NAME} PRIVATE 
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src" # Ermöglicht #include "Renderer/VulkanDevice.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src" 
     "${Stb_INCLUDE_DIR}"
 )
 
@@ -68,18 +81,21 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     imguizmo::imguizmo
 )
 
-# This creates a new build target called "compiled_shaders"
+# Pass all found .slang files to our compilation function
 add_slang_shader_target(compiled_shaders SOURCES ${SHADER_SLANG_SOURCES})
 
-# This makes sure the shaders are compiled BEFORE the executable is built
 add_dependencies(${PROJECT_NAME} compiled_shaders)
 
-# OPTIONAL: Copy the compiled slang.spv to your executable directory so your code can find it
+# Copy the entire 'shaders' output directory to the executable directory
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different 
-    "${CMAKE_CURRENT_BINARY_DIR}/shaders/slang.spv" "${CMAKE_BINARY_DIR}/slang.spv"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+    "${CMAKE_CURRENT_BINARY_DIR}/shaders" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders"
+    COMMENT "Copying compiled shaders to executable directory..."
 )
 
-# Kopiert den Ordner 'resources' in das Ausf�hrungsverzeichnis der Exe
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources 
-     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+# Kopiert den Ordner 'resources' in das Ausführungsverzeichnis der Exe
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory 
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"
+    COMMENT "Copying resources to executable directory..."
+)

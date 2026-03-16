@@ -2,7 +2,8 @@
 
 #include "VulkanDevice.hpp"
 #include "VulkanSwapChain.hpp"
-#include "VulkanGraphicsPipeline.hpp"
+#include "VulkanShader.hpp"
+#include "VulkanPipeline.hpp"
 #include "VulkanFrame.hpp"
 #include "VulkanVertex.hpp"
 #include "VulkanBuffer.hpp"
@@ -39,6 +40,8 @@ public:
     bool framebufferResized = false;
 
 private:
+	void createPipelines();
+
     void createSyncObjects();
 
     void createDepthResources();
@@ -51,6 +54,9 @@ private:
 
     void recordCommandBuffer(uint32_t imageIndex, Scene& scene, AssetManager& assetManager);
 
+    void recordSceneCommands(vk::raii::CommandBuffer &commandBuffer, Scene& scene, AssetManager& assetManager);
+    void recordUICommands(vk::raii::CommandBuffer &commandBuffer, uint32_t imageIndex);
+
     void createBindlessDescriptorSet();
 
     void createDefaultTexture();
@@ -60,7 +66,18 @@ private:
     VulkanContext context;
     VulkanDevice  device;
     VulkanSwapChain swapChain;
-    VulkanGraphicsPipeline graphicsPipeline;
+
+    struct PushConstants {
+        glm::mat4 modelMatrix;
+        uint32_t textureIndex;
+    };
+
+    std::unique_ptr<MainGraphicsShader> m_mainShader;
+    std::unique_ptr<VulkanPipeline> m_graphicsPipeline;
+	
+    std::unique_ptr<SkyboxShader> m_skyboxShader;
+    std::unique_ptr<VulkanPipeline> m_skyboxPipeline;
+
     std::optional<VulkanImage> depthImage;
     std::optional<VulkanImage> colorImage;
 

@@ -233,6 +233,7 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
         DisplayAddComponentEntry<MeshComponent>("Mesh");
         DisplayAddComponentEntry<MaterialComponent>("Material");
         DisplayAddComponentEntry<CameraComponent>("Camera");
+        DisplayAddComponentEntry<SkyboxComponent>("Skybox");
         ImGui::EndPopup();
     }
     ImGui::PopItemWidth();
@@ -347,5 +348,46 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
                 ImGui::Checkbox("Fixed Aspect Ratio", &component.FixedAspectRatio);
             }
         });
+
+    DrawComponent<SkyboxComponent>("Skybox", entity, [&assetManager](auto& component)
+    {
+        std::string previewName = "No Cubemap";
+
+        // 1. Find the name of the currently selected cubemap
+        for (const auto& [name, handle] : assetManager.GetTextureRegistry()) {
+            if (component.CubemapHandle == handle) {
+                previewName = name;
+                break;
+            }
+        }
+
+        // 2. Draw the Dropdown
+        if (ImGui::BeginCombo("Cubemap Asset", previewName.c_str()))
+        {
+            // Option to clear the skybox
+            if (ImGui::Selectable("None", component.CubemapHandle == INVALID_ASSET_HANDLE)) {
+                component.CubemapHandle = INVALID_ASSET_HANDLE;
+            }
+
+            // Loop through all loaded textures
+            for (const auto& [name, handle] : assetManager.GetTextureRegistry())
+            {
+                Texture* tex = assetManager.GetTexture(handle);
+
+                // ONLY show the texture in the dropdown if it is actually a Cubemap!
+                if (tex && tex->IsCubemap())
+                {
+                    bool isSelected = (component.CubemapHandle == handle);
+                    if (ImGui::Selectable(name.c_str(), isSelected)) {
+                        component.CubemapHandle = handle;
+                    }
+                    if (isSelected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+            }
+            ImGui::EndCombo();
+        }
+    });
 
 }

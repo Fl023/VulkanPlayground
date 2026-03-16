@@ -20,6 +20,8 @@ public:
 
     AssetHandle LoadOrCreateTexture(VulkanRenderer& renderer, const std::string& name, const std::string& filepath);
 
+    AssetHandle LoadCubemap(VulkanRenderer& renderer, const std::string& name, const std::array<std::string, 6>& facePaths);
+
     AssetHandle CreateMaterial(const std::string& name, AssetHandle albedoHandle);
 
     AssetHandle AddMesh(const std::string& name, std::unique_ptr<Mesh> mesh);

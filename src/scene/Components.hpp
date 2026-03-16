@@ -55,3 +55,10 @@ struct CameraComponent {
     }
 };
 
+struct SkyboxComponent {
+    AssetHandle CubemapHandle = INVALID_ASSET_HANDLE;
+
+    SkyboxComponent() = default;
+    SkyboxComponent(AssetHandle handle) : CubemapHandle(handle) {}
+};
+

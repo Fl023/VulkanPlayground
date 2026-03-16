@@ -34,8 +34,8 @@ void Camera::RecalculateProjection()
 {
 	if (m_ProjectionType == ProjectionType::Perspective)
 	{
-		m_ProjectionMatrix = glm::perspective(m_PerspectiveFOV, m_AspectRatio, m_NearClip, m_FarClip);
-		m_ProjectionMatrix[1][1] *= -1;
+		m_ProjectionMatrix = glm::perspectiveRH_ZO(m_PerspectiveFOV, m_AspectRatio, m_NearClip, m_FarClip);
+
 	}
 	else // Orthographic
 	{
@@ -43,8 +43,7 @@ void Camera::RecalculateProjection()
 		float orthoRight = m_OrthographicSize * m_AspectRatio * 0.5f;
 		float orthoBottom = -m_OrthographicSize * 0.5f;
 		float orthoTop = m_OrthographicSize * 0.5f;
-		m_ProjectionMatrix = glm::ortho(orthoLeft, orthoRight, orthoBottom, orthoTop, m_NearClip, m_FarClip);
-		m_ProjectionMatrix[1][1] *= -1;
+		m_ProjectionMatrix = glm::orthoRH_ZO(orthoLeft, orthoRight, orthoBottom, orthoTop, m_NearClip, m_FarClip);
 	}
 }
 
@@ -53,5 +52,4 @@ void Camera::RecalculateViewMatrix(const glm::mat4& transform)
 	// The view matrix is the inverse of the camera's transform matrix.
 	// It transforms the world so that it is viewed from the camera's perspective.
 	m_ViewMatrix = glm::inverse(transform);
-	m_ViewProjectionMatrix = m_ProjectionMatrix * m_ViewMatrix;
 }

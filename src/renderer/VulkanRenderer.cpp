@@ -5,17 +5,21 @@ VulkanRenderer::VulkanRenderer(VulkanWindow& window)
     : window(window),
       context(),
       device(context, window),
-      swapChain(device, window),
-      graphicsPipeline(device, swapChain)
+      swapChain(device, window)
 {
     window.setUserPointer(this);
 
+	createPipelines();
+
     vk::DeviceSize uboSize = sizeof(UniformBufferObject);
+
+    const vk::raii::DescriptorSetLayout& cameraLayout = m_mainShader->getLayouts()[0];
+    const vk::raii::DescriptorSetLayout& skyboxLayout = m_skyboxShader->getLayouts()[1];
 
     frames.reserve(MAX_FRAMES_IN_FLIGHT);
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
-        frames.emplace_back(device, graphicsPipeline.getGlobalDescriptorSetLayout(), uboSize);
+        frames.emplace_back(device, cameraLayout, skyboxLayout, uboSize);
     }
 
     createBindlessDescriptorSet();
@@ -26,7 +30,12 @@ VulkanRenderer::VulkanRenderer(VulkanWindow& window)
 
 	createSyncObjects();
     imGuiLayer = std::make_unique<ImGuiLayer>(device, swapChain);
-    m_ViewportTarget.emplace(device, window.getWidth(), window.getHeight(), swapChain.getSurfaceFormat().format);
+    m_ViewportTarget.emplace(
+        device,
+        static_cast<uint32_t>(window.getWidth()),
+        static_cast<uint32_t>(window.getHeight()),
+        swapChain.getSurfaceFormat().format
+    );
 }
 
 VulkanRenderer::~VulkanRenderer()
@@ -184,6 +193,48 @@ void VulkanRenderer::SubmitToDeletionQueue(std::function<void()>&& function)
     m_DeletionQueues[frameIndex].push_back(std::move(function));
 }
 
+void VulkanRenderer::createPipelines()
+{
+    m_mainShader = std::make_unique<MainGraphicsShader>(device, "shaders/shader.spv");
+
+    PipelineConfigInfo config{};
+    VulkanPipeline::defaultPipelineConfigInfo(config, device.getMsaaSamples());
+
+    // Add your Push Constant range
+    config.pushConstantRanges.push_back({
+        .stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+        .offset = 0,
+        .size = sizeof(PushConstants)
+        });
+
+    // Set dynamic rendering formats based on the swapchain
+    config.colorAttachmentFormats = { swapChain.getSurfaceFormat().format };
+    config.depthAttachmentFormat = vk::Format::eD32Sfloat;
+
+    m_graphicsPipeline = std::make_unique<VulkanPipeline>(device, *m_mainShader, config);
+
+
+
+    m_skyboxShader = std::make_unique<SkyboxShader>(device, "shaders/skybox.spv");
+
+    PipelineConfigInfo skyboxConfig{};
+    VulkanPipeline::defaultPipelineConfigInfo(skyboxConfig, device.getMsaaSamples());
+
+    // Override states specifically for the skybox
+    skyboxConfig.rasterizationInfo.cullMode = vk::CullModeFlagBits::eNone;
+    skyboxConfig.depthStencilInfo.depthWriteEnable = vk::False;
+    skyboxConfig.depthStencilInfo.depthCompareOp = vk::CompareOp::eLessOrEqual;
+
+    skyboxConfig.colorAttachmentFormats = { swapChain.getSurfaceFormat().format };
+    skyboxConfig.depthAttachmentFormat = vk::Format::eD32Sfloat;
+
+    auto positionAttribute = skyboxConfig.attributeDescriptions[0];
+    skyboxConfig.attributeDescriptions.clear();
+    skyboxConfig.attributeDescriptions.push_back(positionAttribute);
+
+    m_skyboxPipeline = std::make_unique<VulkanPipeline>(device, *m_skyboxShader, skyboxConfig);
+}
+
 void VulkanRenderer::createSyncObjects()
 {
     renderFinishedSemaphores.clear();
@@ -262,83 +313,48 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
     // Begin command buffer
     vk::CommandBufferBeginInfo beginInfo{};
     commandBuffer.begin(beginInfo);
+    
+    // 1. Draw the 3D World to the Offscreen Viewport
+	recordSceneCommands(commandBuffer, scene, assetManager);
 
-    // We no longer render our 3D scene directly to the window (monitor). 
-    // We are rendering to an internal 1-sample offscreen image that ImGui will 
-    // later read and display inside the Editor Viewport panel.
-    // 'eTopOfPipe' was used because we had to wait for the OS to hand us the 
-    // swapchain image before doing anything. Since our new image lives purely in 
-    // our engine's VRAM, we don't need to halt the start of the GPU pipeline. We 
-    // only need it ready by the time the fragment shader outputs color.
-    device.transitionImageLayout(
-        commandBuffer,
-        *m_ViewportTarget->GetResolveImage().getImage(), // swapChain.getImages()[imageIndex],
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eColorAttachmentOptimal,
-        1,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput, // vk::PipelineStageFlagBits2::eTopOfPipe,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        {},
-        vk::AccessFlagBits2::eColorAttachmentWrite,
-        vk::ImageAspectFlagBits::eColor
-	);
+    // 2. Draw ImGui (and the Viewport image) to the Swapchain Monitor
+	recordUICommands(commandBuffer, imageIndex);
 
-    // Because oldLayout is eUndefined, we are throwing away the old pixels. 
-    // Forcing the GPU to wait for previous writes to finish just to throw the data 
-    // away is an unnecessary performance penalty. eNone says "discard immediately."
-    device.transitionImageLayout(
-        commandBuffer,
-        *m_ViewportTarget->GetColorImage().getImage(), // colorImage->getImage(),
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eColorAttachmentOptimal,
-        1,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        vk::AccessFlagBits2::eNone, // vk::AccessFlagBits2::eColorAttachmentWrite,
-        vk::AccessFlagBits2::eColorAttachmentWrite,
-        vk::ImageAspectFlagBits::eColor);
+    commandBuffer.end();
+}
 
-    // Exactly the same optimization as the color image above. We are discarding 
-    // the old depth data (eUndefined), so waiting for old depth writes to finish is 
-    // a waste of GPU cycles. eNone removes the stall.
-    device.transitionImageLayout(
-        commandBuffer,
-        *m_ViewportTarget->GetDepthImage().getImage(), // depthImage->getImage(),
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eDepthAttachmentOptimal,
-        1,
-        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
-        vk::AccessFlagBits2::eNone, // vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
-        vk::ImageAspectFlagBits::eDepth
-    );
+void VulkanRenderer::recordSceneCommands(vk::raii::CommandBuffer &commandBuffer, Scene& scene, AssetManager& assetManager)
+{
+    // 1. Transition Viewport Targets
+    device.transitionImageLayout(commandBuffer, *m_ViewportTarget->GetResolveImage().getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal, 1, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eColorAttachmentOutput, {}, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageAspectFlagBits::eColor);
+    device.transitionImageLayout(commandBuffer, *m_ViewportTarget->GetColorImage().getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal, 1, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eNone, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageAspectFlagBits::eColor);
+    device.transitionImageLayout(commandBuffer, *m_ViewportTarget->GetDepthImage().getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthAttachmentOptimal, 1, vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests, vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests, vk::AccessFlagBits2::eNone, vk::AccessFlagBits2::eDepthStencilAttachmentWrite, vk::ImageAspectFlagBits::eDepth);
 
-    // Dynamic Rendering Setup
+    // 2. Dynamic Rendering Setup
     vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
     vk::ClearValue clearDepth = vk::ClearDepthStencilValue(1.0f, 0);
-    
+
     vk::RenderingAttachmentInfo colorAttachment = {
-        .imageView = *m_ViewportTarget->GetColorImage().getImageView(), // colorImage->getImageView(),
+        .imageView = *m_ViewportTarget->GetColorImage().getImageView(),
         .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .resolveMode = vk::ResolveModeFlagBits::eAverage,
-        .resolveImageView = *m_ViewportTarget->GetResolveImage().getImageView(), // swapChain.getImageViews()[imageIndex],
+        .resolveImageView = *m_ViewportTarget->GetResolveImage().getImageView(),
         .resolveImageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = clearColor 
+        .clearValue = clearColor
     };
 
     vk::RenderingAttachmentInfo depthAttachment = {
-        .imageView = *m_ViewportTarget->GetDepthImage().getImageView(), // depthImage->getImageView(),
+        .imageView = *m_ViewportTarget->GetDepthImage().getImageView(),
         .imageLayout = vk::ImageLayout::eDepthAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eDontCare,
-        .clearValue = clearDepth 
+        .clearValue = clearDepth
     };
 
     vk::RenderingInfo renderingInfo = {
-        .renderArea = { {0, 0}, {m_ViewportTarget->GetWidth(), m_ViewportTarget->GetHeight()} }, // {.offset = { 0, 0 }, .extent = swapChain.getExtent()},
+        .renderArea = { {0, 0}, {m_ViewportTarget->GetWidth(), m_ViewportTarget->GetHeight()} },
         .layerCount = 1,
         .colorAttachmentCount = 1,
         .pColorAttachments = &colorAttachment,
@@ -347,116 +363,124 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
 
     commandBuffer.beginRendering(renderingInfo);
 
-    // Bind Pipeline
-    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, graphicsPipeline.getGraphicsPipeline());
+    // 3. Bind State
+    commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline->getPipeline());
+    std::array<vk::DescriptorSet, 2> setsToBind = { *frames[frameIndex].cameraSet, *bindlessDescriptorSet };
+    commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline->getPipelineLayout(), 0, setsToBind, {});
 
-    // Bind Descriptor Sets
-    // Set 0 = Camera (UBO), Set 1 = Global Bindless Array
-    std::array<vk::DescriptorSet, 2> setsToBind = {
-        *frames[frameIndex].cameraSet,
-        *bindlessDescriptorSet
+    vk::Viewport viewport{
+        0.0f,                                   // x
+        (float)m_ViewportTarget->GetHeight(),   // y (Shift the origin to the bottom of the screen)
+        (float)m_ViewportTarget->GetWidth(),    // width
+        -(float)m_ViewportTarget->GetHeight(),  // height (Make the height negative to flip the rendering)
+        0.0f,                                   // minDepth
+        1.0f                                    // maxDepth
     };
-
-    commandBuffer.bindDescriptorSets(
-        vk::PipelineBindPoint::eGraphics,
-        graphicsPipeline.getPipelineLayout(),
-        0, // First set being bound is Set 0
-        setsToBind,
-        {}
-    );
-
-    // Dynamic State: Viewport & Scissor
-    vk::Viewport viewport{ 0.0f, 0.0f, (float)m_ViewportTarget->GetWidth(), (float)m_ViewportTarget->GetHeight(), 0.0f, 1.0f };
-    // vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(swapChain.getExtent().width), static_cast<float>(swapChain.getExtent().height), 0.0f, 1.0f);
     commandBuffer.setViewport(0, viewport);
-
     vk::Rect2D scissor{ {0, 0}, {m_ViewportTarget->GetWidth(), m_ViewportTarget->GetHeight()} };
-    // vk::Rect2D scissor({ 0, 0 }, swapChain.getExtent());
     commandBuffer.setScissor(0, scissor);
 
+    // 4. Draw Entities
     auto view = scene.m_Registry.view<MeshComponent, TransformComponent>();
-
     for (auto entity : view) {
         auto& meshComp = view.get<MeshComponent>(entity);
         auto& transformComp = view.get<TransformComponent>(entity);
 
-        // 1. Check if the entity actually has a valid Mesh ticket
         if (meshComp.MeshHandle != INVALID_ASSET_HANDLE) {
-
-            // 2. Ask the Vault for the actual Mesh memory
             Mesh* mesh = assetManager.GetMesh(meshComp.MeshHandle);
-
-            // 3. Make sure the mesh actually exists (in case it was deleted!)
             if (mesh) {
-
-                // Default to Slot 0 (the guaranteed 1x1 white pixel we setup earlier)
                 uint32_t texIndex = 0;
-
-                // 4. Resolve the Material and Texture
                 if (scene.m_Registry.all_of<MaterialComponent>(entity)) {
                     auto& matComp = scene.m_Registry.get<MaterialComponent>(entity);
-
                     if (matComp.MaterialHandle != INVALID_ASSET_HANDLE) {
                         Material* material = assetManager.GetMaterial(matComp.MaterialHandle);
-
-                        // If the material exists, and it has a texture assigned to it...
                         if (material && material->GetTextureHandle() != INVALID_ASSET_HANDLE) {
                             Texture* albedo = assetManager.GetTexture(material->GetTextureHandle());
-
-                            // If the texture wasn't deleted, grab its bindless slot!
-                            if (albedo) {
-                                texIndex = albedo->GetBindlessIndex();
-                            }
+                            if (albedo) texIndex = albedo->GetBindlessIndex();
                         }
                     }
                 }
 
-                PushConstants pushData{
-                    .modelMatrix = transformComp.GetTransform(),
-                    .textureIndex = texIndex
-                };
-
-                // Send push constant to gpu
-                commandBuffer.pushConstants<PushConstants>(
-                    graphicsPipeline.getPipelineLayout(),
-                    vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-                    0,
-                    pushData
-                );
-
-                // Bind Vertex & Index Buffer using our resolved 'mesh' pointer
+                PushConstants pushData{ .modelMatrix = transformComp.GetTransform(), .textureIndex = texIndex };
+                commandBuffer.pushConstants<PushConstants>(m_graphicsPipeline->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, pushData);
                 commandBuffer.bindVertexBuffers(0, *mesh->getVertexBuffer(), { 0 });
                 commandBuffer.bindIndexBuffer(*mesh->getIndexBuffer(), 0, vk::IndexType::eUint16);
-
                 commandBuffer.drawIndexed(mesh->getIndexCount(), 1, 0, 0, 0);
             }
         }
     }
+
+    // --- DRAW SKYBOX ---
+    auto skyboxView = scene.m_Registry.view<SkyboxComponent>();
+    for (auto entity : skyboxView) {
+        auto& skybox = skyboxView.get<SkyboxComponent>(entity);
+
+        if (skybox.CubemapHandle != INVALID_ASSET_HANDLE) {
+
+            // 1. The Dirty Check (Only update if the texture changed!)
+            if (frames[frameIndex].activeSkyboxHandle != skybox.CubemapHandle) {
+                Texture* cubemap = assetManager.GetTexture(skybox.CubemapHandle);
+
+                if (cubemap) {
+                    vk::DescriptorImageInfo imageInfo = cubemap->GetDescriptorInfo();
+                    vk::WriteDescriptorSet write{
+                        .dstSet = *frames[frameIndex].skyboxSet,
+                        .dstBinding = 0,
+                        .dstArrayElement = 0,
+                        .descriptorCount = 1,
+                        .descriptorType = vk::DescriptorType::eCombinedImageSampler,
+                        .pImageInfo = &imageInfo
+                    };
+
+                    device.getDevice().updateDescriptorSets(write, {});
+                    frames[frameIndex].activeSkyboxHandle = skybox.CubemapHandle;
+                }
+            }
+
+            // 2. Bind Pipeline & Descriptor Sets
+            commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *m_skyboxPipeline->getPipeline());
+
+            std::array<vk::DescriptorSet, 2> setsToBind = {
+                *frames[frameIndex].cameraSet,
+                *frames[frameIndex].skyboxSet
+            };
+
+            commandBuffer.bindDescriptorSets(
+                vk::PipelineBindPoint::eGraphics,
+                *m_skyboxPipeline->getPipelineLayout(),
+                0, setsToBind, {}
+            );
+
+            // 3. Draw the Cube!
+            Mesh* cubeMesh = assetManager.GetMesh("Cube");
+            if (cubeMesh) {
+                commandBuffer.bindVertexBuffers(0, *cubeMesh->getVertexBuffer(), { 0 });
+                commandBuffer.bindIndexBuffer(*cubeMesh->getIndexBuffer(), 0, vk::IndexType::eUint16);
+                commandBuffer.drawIndexed(cubeMesh->getIndexCount(), 1, 0, 0, 0);
+            }
+        }
+    }
+
+    // 5. End Scene Render
     commandBuffer.endRendering();
+}
 
-    // Transition the 1-sample Resolve Image so ImGui's Shader can read it!
-    device.transitionImageLayout(
-        commandBuffer, *m_ViewportTarget->GetResolveImage().getImage(),
-        vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 1,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eFragmentShader,
-        vk::AccessFlagBits2::eColorAttachmentWrite, vk::AccessFlagBits2::eShaderRead, vk::ImageAspectFlagBits::eColor
-    );
+void VulkanRenderer::recordUICommands(vk::raii::CommandBuffer& commandBuffer, uint32_t imageIndex)
+{
+    // 1. Transition Viewport Resolve Image for ImGui to read
+    device.transitionImageLayout(commandBuffer, *m_ViewportTarget->GetResolveImage().getImage(), vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 1, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eColorAttachmentWrite, vk::AccessFlagBits2::eShaderRead, vk::ImageAspectFlagBits::eColor);
 
-    // Transition the Swapchain image for drawing
-    device.transitionImageLayout(
-        commandBuffer, swapChain.getImages()[imageIndex],
-        vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal, 1,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        vk::AccessFlagBits2::eNone, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageAspectFlagBits::eColor
-    );
+    // 2. Transition Swapchain Image for Drawing
+    device.transitionImageLayout(commandBuffer, swapChain.getImages()[imageIndex], vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal, 1, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::AccessFlagBits2::eNone, vk::AccessFlagBits2::eColorAttachmentWrite, vk::ImageAspectFlagBits::eColor);
 
-    // 2. Setup Swapchain Dynamic Rendering
+    // 3. Dynamic Rendering Setup for UI
+    vk::ClearValue clearColor = vk::ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
     vk::RenderingAttachmentInfo swapchainAttachment{
         .imageView = swapChain.getImageViews()[imageIndex],
         .imageLayout = vk::ImageLayout::eColorAttachmentOptimal,
         .loadOp = vk::AttachmentLoadOp::eClear,
         .storeOp = vk::AttachmentStoreOp::eStore,
-        .clearValue = clearColor // UI Background (usually hidden by docking)
+        .clearValue = clearColor
     };
 
     vk::RenderingInfo swapchainRenderInfo{
@@ -468,24 +492,13 @@ void VulkanRenderer::recordCommandBuffer(uint32_t imageIndex, Scene& scene, Asse
 
     commandBuffer.beginRendering(swapchainRenderInfo);
 
+    // 4. Draw UI
     imGuiLayer->recordImGuiCommands(commandBuffer);
 
     commandBuffer.endRendering();
 
-    device.transitionImageLayout(
-        commandBuffer,
-        swapChain.getImages()[imageIndex],
-        vk::ImageLayout::eColorAttachmentOptimal,
-        vk::ImageLayout::ePresentSrcKHR,
-        1,
-        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits2::eBottomOfPipe,
-        vk::AccessFlagBits2::eColorAttachmentWrite,
-        {},
-        vk::ImageAspectFlagBits::eColor
-	);
-
-    commandBuffer.end();
+    // 5. Transition Swapchain to Present
+    device.transitionImageLayout(commandBuffer, swapChain.getImages()[imageIndex], vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR, 1, vk::PipelineStageFlagBits2::eColorAttachmentOutput, vk::PipelineStageFlagBits2::eBottomOfPipe, vk::AccessFlagBits2::eColorAttachmentWrite, {}, vk::ImageAspectFlagBits::eColor);
 }
 
 void VulkanRenderer::createBindlessDescriptorSet()
@@ -512,12 +525,14 @@ void VulkanRenderer::createBindlessDescriptorSet()
         .pDescriptorCounts = variableDescCounts
     };
 
+    vk::DescriptorSetLayout materialLayout = *m_mainShader->getLayouts()[1];
+
     // 2. Allocate the single global set
     vk::DescriptorSetAllocateInfo allocInfo{
         .pNext = &variableAllocInfo,
         .descriptorPool = *bindlessPool,
         .descriptorSetCount = 1,
-        .pSetLayouts = &*graphicsPipeline.getMaterialDescriptorSetLayout()
+        .pSetLayouts = &materialLayout
     };
 
     bindlessDescriptorSet = std::move(device.getDevice().allocateDescriptorSets(allocInfo).front());

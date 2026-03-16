@@ -151,6 +151,77 @@ void ContentBrowserPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
 
     ImGui::Separator();
 
+    // --- CUBEMAPS ---
+    if (ImGui::CollapsingHeader("Cubemaps", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::TextDisabled("Cubemaps share memory with Textures and can be deleted there.");
+        ImGui::Spacing();
+
+        static std::string newCubemapName = "NewSkybox";
+        ImGui::InputText("Cubemap Name", &newCubemapName);
+        ImGui::Spacing();
+
+        static std::array<std::string, 6> facePaths = { "", "", "", "", "", "" };
+        const char* faceLabels[6] = {
+            "Right (+X)", "Left (-X)", "Top (+Y)",
+            "Bottom (-Y)", "Front (+Z)", "Back (-Z)"
+        };
+
+        bool allFacesSelected = true;
+
+        for (int i = 0; i < 6; i++) {
+            ImGui::PushID(i);
+
+            // Text input for the path
+            ImGui::InputText(faceLabels[i], &facePaths[i]);
+
+            // Allow drag and drop from the Content Browser directly into the text box!
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("CONTENT_BROWSER_ITEM")) {
+                    const wchar_t* path = (const wchar_t*)payload->Data;
+                    std::filesystem::path texturePath(path);
+
+                    if (texturePath.extension() == ".png" || texturePath.extension() == ".jpg") {
+                        facePaths[i] = texturePath.string();
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Browse...")) {
+                std::string filepath = FileDialogs::OpenFile("Image Files (*.png;*.jpg;*.jpeg)\0*.png;*.jpg;*.jpeg\0All Files (*.*)\0*.*\0");
+                if (!filepath.empty()) {
+                    facePaths[i] = filepath;
+                }
+            }
+            ImGui::PopID();
+
+            // Check if any slot is still empty
+            if (facePaths[i].empty()) {
+                allFacesSelected = false;
+            }
+        }
+
+        ImGui::Spacing();
+
+        // Disable the load button unless all 6 faces and a name are provided
+        ImGui::BeginDisabled(!allFacesSelected || newCubemapName.empty());
+        if (ImGui::Button("Load Cubemap", ImVec2(ImGui::GetContentRegionAvail().x, 0))) {
+
+            assetManager.LoadCubemap(renderer, newCubemapName, facePaths);
+
+            // Reset the form after successful load
+            newCubemapName = "NewSkybox";
+            for (auto& path : facePaths) {
+                path = "";
+            }
+        }
+        ImGui::EndDisabled();
+    }
+
+    ImGui::Separator();
+
     // --- MATERIALS ---
     if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen))
     {

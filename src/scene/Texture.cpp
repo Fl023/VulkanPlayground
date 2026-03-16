@@ -23,24 +23,68 @@ Texture::Texture(const VulkanDevice& device, uint32_t width, uint32_t height, co
     createVulkanImage(pixels, imageSize);
 }
 
+Texture::Texture(const VulkanDevice& device, const std::array<std::string, 6>& facePaths)
+    : m_device(device), m_FilePath(facePaths[0]), m_mipLevels(1), m_IsCubemap(true)
+{
+    stbi_uc* pixels[6];
+    int texChannels;
+    vk::DeviceSize layerSize = 0;
+    vk::DeviceSize totalImageSize = 0;
+
+    // 1. Load all 6 images from disk
+    for (int i = 0; i < 6; i++) {
+        pixels[i] = stbi_load(facePaths[i].c_str(), &m_texWidth, &m_texHeight, &texChannels, STBI_rgb_alpha);
+        if (!pixels[i]) {
+            throw std::runtime_error("Failed to load cubemap face: " + facePaths[i]);
+        }
+        layerSize = m_texWidth * m_texHeight * 4;
+        totalImageSize += layerSize;
+    }
+
+    // 2. Allocate one contiguous block of RAM to hold all 6 images
+    unsigned char* allPixels = new unsigned char[totalImageSize];
+
+    // 3. Stitch the 6 images together into the RAM block
+    for (int i = 0; i < 6; i++) {
+        memcpy(allPixels + (i * layerSize), pixels[i], layerSize);
+        stbi_image_free(pixels[i]); // Free the individual stb_image allocations
+    }
+
+    // 4. REUSE YOUR METHOD! The magic happens here.
+    createVulkanImage(allPixels, totalImageSize);
+
+    // 5. Clean up the RAM block
+    delete[] allPixels;
+}
+
 Texture::~Texture()
 {
 }
 
 void Texture::createVulkanImage(const void* pixels, vk::DeviceSize imageSize)
 {
+    uint32_t layerCount = m_IsCubemap ? 6 : 1;
+
     VulkanBuffer stagingBuffer(m_device, imageSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
     stagingBuffer.upload(pixels, imageSize);
 
-    m_Image.emplace(m_device, m_texWidth, m_texHeight, m_mipLevels, vk::SampleCountFlagBits::e1, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor);
+    m_Image.emplace(m_device, m_texWidth, m_texHeight, m_mipLevels, vk::SampleCountFlagBits::e1, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eColor, m_IsCubemap);
 
     auto commandBuffer = m_device.beginSingleTimeCommands();
-    m_device.transitionImageLayout(commandBuffer, m_Image->getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, m_mipLevels, vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eTransfer, {}, vk::AccessFlagBits2::eTransferWrite, vk::ImageAspectFlagBits::eColor);
+    m_device.transitionImageLayout(commandBuffer, m_Image->getImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, m_mipLevels, vk::PipelineStageFlagBits2::eTopOfPipe, vk::PipelineStageFlagBits2::eTransfer, {}, vk::AccessFlagBits2::eTransferWrite, vk::ImageAspectFlagBits::eColor, layerCount);
     m_device.endSingleTimeCommands(commandBuffer);
 
-    m_device.copyBufferToImage(*stagingBuffer.getBuffer(), *m_Image->getImage(), static_cast<uint32_t>(m_texWidth), static_cast<uint32_t>(m_texHeight));
+    m_device.copyBufferToImage(*stagingBuffer.getBuffer(), *m_Image->getImage(), static_cast<uint32_t>(m_texWidth), static_cast<uint32_t>(m_texHeight), layerCount);
 
-    generateMipmaps();
+    if (!m_IsCubemap) {
+        generateMipmaps();
+    }
+    else {
+        // Skyboxes generally don't use standard mipmaps. Just transition all 6 layers to Shader Read!
+        auto cmd = m_device.beginSingleTimeCommands();
+        m_device.transitionImageLayout(cmd, m_Image->getImage(), vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, m_mipLevels, vk::PipelineStageFlagBits2::eTransfer, vk::PipelineStageFlagBits2::eFragmentShader, vk::AccessFlagBits2::eTransferWrite, vk::AccessFlagBits2::eShaderRead, vk::ImageAspectFlagBits::eColor, layerCount);
+        m_device.endSingleTimeCommands(cmd);
+    }
 
     m_Sampler = m_device.getDefaultSampler();
 }

@@ -108,12 +108,6 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
             if (camComp.Primary) {
                 cameraView = camComp.SceneCamera.GetViewMatrix();
                 cameraProjection = camComp.SceneCamera.GetProjectionMatrix();
-
-                // VULKAN HACK FÜR IMGUIZMO: 
-                // Da Vulkan Y nach unten hat (und ImGuizmo OpenGL erwartet),
-                // müssen wir den Y-Flip der Projection temporär rückgängig machen.
-                cameraProjection[1][1] *= -1.0f;
-
                 cameraFound = true;
                 break;
             }

@@ -44,7 +44,27 @@ private:
 		trans.Translation = glm::vec3(2.0f, 2.0f, 2.0f);
 
 		glm::vec3 direction = glm::normalize(glm::vec3(0.0f) - trans.Translation);
-		trans.Rotation = glm::eulerAngles(glm::quatLookAt(direction, glm::vec3(0.0f, 0.0f, 1.0f)));
+		trans.Rotation = glm::eulerAngles(glm::quatLookAt(direction, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+
+		std::array<std::string, 6> skyboxFaces = {
+		"resources/skyboxes/Plants/posx.jpg", // +X
+		"resources/skyboxes/Plants/negx.jpg", // -X
+		"resources/skyboxes/Plants/posy.jpg", // +Y
+		"resources/skyboxes/Plants/negy.jpg", // -Y
+		"resources/skyboxes/Plants/posz.jpg", // +Z
+		"resources/skyboxes/Plants/negz.jpg"  // -Z
+		};
+
+		// 1. Ask the AssetManager to load the 6 images into a single Cubemap texture
+		AssetHandle skyboxHandle = assetManager.LoadCubemap(renderer, "DefaultSkybox", skyboxFaces);
+
+		// 2. Create an entity to hold the skybox in the scene
+		Entity skyboxEntity = activeScene.CreateEntity("Skybox");
+
+		// 3. Attach the component and pass it the handle
+		skyboxEntity.AddComponent<SkyboxComponent>(skyboxHandle);
+
 
 		// 1. Create Meshes as unique_ptrs and move them into the Vault. Capture the returned Handle!
 		auto squareMesh = std::make_unique<Mesh>(renderer.getDevice(), "Square", squareVertices, squareIndices);

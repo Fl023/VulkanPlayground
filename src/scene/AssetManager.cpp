@@ -41,6 +41,23 @@ AssetHandle AssetManager::LoadOrCreateTexture(VulkanRenderer& renderer, const st
     return handle;
 }
 
+AssetHandle AssetManager::LoadCubemap(VulkanRenderer& renderer, const std::string& name, const std::array<std::string, 6>& facePaths)
+{
+    if (m_TextureRegistry.find(name) != m_TextureRegistry.end()) {
+        return m_TextureRegistry[name];
+    }
+
+    AssetHandle handle = GenerateHandle();
+
+    // Use the new Cubemap constructor!
+    auto texture = std::make_unique<Texture>(renderer.getDevice(), facePaths);
+
+    m_Textures[handle] = std::move(texture);
+    m_TextureRegistry[name] = handle;
+
+    return handle;
+}
+
 AssetHandle AssetManager::CreateMaterial(const std::string& name, AssetHandle albedoHandle)
 {
     if (m_MaterialRegistry.find(name) != m_MaterialRegistry.end()) {
