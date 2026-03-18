@@ -89,13 +89,10 @@ add_dependencies(${PROJECT_NAME} compiled_shaders)
 # Copy the entire 'shaders' output directory to the executable directory
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory 
-    "${CMAKE_CURRENT_BINARY_DIR}/shaders" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders"
+    "${CMAKE_CURRENT_BINARY_DIR}/shaders" "${CMAKE_CURRENT_BINARY_DIR}/shaders"
     COMMENT "Copying compiled shaders to executable directory..."
 )
 
 # Kopiert den Ordner 'resources' in das Ausführungsverzeichnis der Exe
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory 
-    "${CMAKE_CURRENT_SOURCE_DIR}/resources" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/resources"
-    COMMENT "Copying resources to executable directory..."
-)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources 
+     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

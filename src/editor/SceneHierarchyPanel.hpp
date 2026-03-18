@@ -23,7 +23,7 @@ public:
 
 private:
     // Zeichnet einen einzelnen Knoten im Hierarchy-Baum
-    void DrawEntityNode(Entity entity, VulkanRenderer& renderer);
+    void DrawEntityNode(Entity entity);
     
     // Zeichnet den Inspector/Properties-Tab für die ausgewählte Entity
     void DrawComponents(Entity entity, AssetManager& assetManager, VulkanRenderer& renderer);

@@ -295,7 +295,7 @@ void VulkanRenderer::updateUniformBuffer(uint32_t currentImage, Scene& scene) {
             //camComp.SceneCamera.SetViewportSize(swapChain.getExtent().width, swapChain.getExtent().height);
 
             // 2. View-Matrix basierend auf dem Transform der Entity berechnen
-            camComp.SceneCamera.RecalculateViewMatrix(transform.GetTransform());
+            camComp.SceneCamera.RecalculateViewMatrix(transform.WorldMatrix);
 
             // 3. Matrizen ins UBO kopieren
             ubo.view = camComp.SceneCamera.GetViewMatrix();
@@ -401,7 +401,7 @@ void VulkanRenderer::recordSceneCommands(vk::raii::CommandBuffer &commandBuffer,
                     }
                 }
 
-                PushConstants pushData{ .modelMatrix = transformComp.GetTransform(), .textureIndex = texIndex };
+                PushConstants pushData{ .modelMatrix = transformComp.WorldMatrix, .textureIndex = texIndex };
                 commandBuffer.pushConstants<PushConstants>(m_graphicsPipeline->getPipelineLayout(), vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, pushData);
                 commandBuffer.bindVertexBuffers(0, *mesh->getVertexBuffer(), { 0 });
                 commandBuffer.bindIndexBuffer(*mesh->getIndexBuffer(), 0, vk::IndexType::eUint16);

@@ -115,7 +115,7 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
 
         if (cameraFound) {
             auto& tc = selectedEntity.GetComponent<TransformComponent>();
-            glm::mat4 transform = tc.GetTransform();
+            glm::mat4 transform = tc.WorldMatrix;
 
             bool snap = ImGui::IsKeyDown(ImGuiKey_LeftCtrl); // Ist die linke STRG-Taste gedrückt?
 
@@ -138,9 +138,7 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
                         glm::value_ptr(scale));
 
                     tc.Translation = translation;
-
-                    // ImGuizmo gibt Rotation in Grad zurück, aber deine Component speichert Radiant
-                    tc.Rotation = glm::radians(rotationDegrees);
+                    tc.SetEulerAngles(glm::radians(rotationDegrees));
                     tc.Scale = scale;
                 }
             }

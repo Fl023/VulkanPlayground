@@ -42,6 +42,12 @@ public:
         m_Scene->m_Registry.remove<T>(m_EntityHandle);
     }
 
+    void AddChild(Entity child);
+
+    Entity GetParent();
+
+    bool HasParent();
+
     // Hilfskonvertierung: Prüfen, ob die Entity gültig ist
     operator bool() const { return m_EntityHandle != entt::null; }
 

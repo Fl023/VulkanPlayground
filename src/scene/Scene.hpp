@@ -21,4 +21,6 @@ public:
 
 private:
     friend class Entity;
+
+    void UpdateTransformHierarchy(entt::entity entityHandle, const glm::mat4& parentMatrix);
 };

@@ -149,11 +149,13 @@ void SceneHierarchyPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
 
     if (m_Context)
     {
-        auto view = m_Context->m_Registry.view<TagComponent>();
+        auto view = m_Context->m_Registry.view<RelationshipComponent>();
         for (auto entityID : view)
         {
             Entity entity{ entityID , m_Context };
-            DrawEntityNode(entity, renderer);
+			const auto& rel = entity.GetComponent<RelationshipComponent>();
+			if (rel.Parent == entt::null)
+                DrawEntityNode(entity);
         }
 
         if (ImGui::IsMouseDown(0) && ImGui::IsWindowHovered())
@@ -177,14 +179,20 @@ void SceneHierarchyPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
     ImGui::End();
 }
 
-void SceneHierarchyPanel::DrawEntityNode(Entity entity, VulkanRenderer& renderer)
+void SceneHierarchyPanel::DrawEntityNode(Entity entity)
 {
     auto& tag = entity.GetComponent<TagComponent>().Tag;
+    auto& rel = entity.GetComponent<RelationshipComponent>();
     
-    ImGuiTreeNodeFlags flags = ((m_SelectionContext == entity) ? ImGuiTreeNodeFlags_Selected : 0) | ImGuiTreeNodeFlags_OpenOnArrow;
-    flags |= ImGuiTreeNodeFlags_SpanAvailWidth;
-    flags |= ImGuiTreeNodeFlags_Leaf;
-    
+    ImGuiTreeNodeFlags flags = ((m_SelectionContext == entity) ? ImGuiTreeNodeFlags_Selected : 0)
+        | ImGuiTreeNodeFlags_OpenOnArrow
+        | ImGuiTreeNodeFlags_SpanAvailWidth;
+
+    // If the entity has no children, render it as a leaf (removes the expand arrow)
+    if (rel.FirstChild == entt::null) {
+        flags |= ImGuiTreeNodeFlags_Leaf;
+    }
+
     bool opened = ImGui::TreeNodeEx((void*)(uint64_t)(uint32_t)entity, flags, tag.c_str());
     if (ImGui::IsItemClicked())
     {
@@ -201,15 +209,23 @@ void SceneHierarchyPanel::DrawEntityNode(Entity entity, VulkanRenderer& renderer
 
     if (opened)
     {
-        // Placeholder für Child-Entities
+        entt::entity currentChild = rel.FirstChild;
+
+        // Traverse the linked list of siblings
+        while (currentChild != entt::null) {
+            Entity childEntity(currentChild, m_Context);
+            DrawEntityNode(childEntity); // Recursion!
+
+            // Move to the next child
+            currentChild = childEntity.GetComponent<RelationshipComponent>().NextSibling;
+        }
         ImGui::TreePop();
     }
 
     if (entityDeleted)
     {
+        if (m_SelectionContext == entity) m_SelectionContext = {};
         m_Context->DestroyEntity(entity);
-        if (m_SelectionContext == entity)
-            m_SelectionContext = {};
     }
 }
 
@@ -241,9 +257,9 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
     DrawComponent<TransformComponent>("Transform", entity, [](auto& component)
     {
         DrawVec3Control("Translation", component.Translation);
-        glm::vec3 rotation = glm::degrees(component.Rotation);
+        glm::vec3 rotation = glm::degrees(component.GetEulerAngles());
         DrawVec3Control("Rotation", rotation);
-        component.Rotation = glm::radians(rotation);
+        component.SetEulerAngles(glm::radians(rotation));
         DrawVec3Control("Scale", component.Scale, 1.0f);
     });
 

@@ -5,6 +5,7 @@
 #include "core/Input.hpp"
 #include "scene/AssetManager.hpp"
 #include "editor/EditorUI.hpp"
+#include "scene/ModelLoader.hpp"
 
 
 class HelloTriangleApplication
@@ -44,7 +45,11 @@ private:
 		trans.Translation = glm::vec3(2.0f, 2.0f, 2.0f);
 
 		glm::vec3 direction = glm::normalize(glm::vec3(0.0f) - trans.Translation);
-		trans.Rotation = glm::eulerAngles(glm::quatLookAt(direction, glm::vec3(0.0f, 1.0f, 0.0f)));
+		trans.SetRotation(glm::quatLookAt(direction, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+
+		assetManager.AddMesh("Cube", std::make_unique<Mesh>(renderer.getDevice(), "Cube", cubeVertices, cubeIndices));
+		assetManager.AddMesh("Square", std::make_unique<Mesh>(renderer.getDevice(), "Square", squareVertices, squareIndices));
 
 
 		std::array<std::string, 6> skyboxFaces = {
@@ -65,38 +70,10 @@ private:
 		// 3. Attach the component and pass it the handle
 		skyboxEntity.AddComponent<SkyboxComponent>(skyboxHandle);
 
+		Entity adamHead = ModelLoader::LoadGltf(&activeScene, renderer, assetManager, "resources/adamHead/adamHead.gltf");
+		adamHead.GetComponent<TransformComponent>().SetEulerAngles(glm::vec3(0.0f, glm::radians(180.0f), 0.0f));
+		adamHead.GetComponent<TransformComponent>().Scale = glm::vec3(0.5f);
 
-		// 1. Create Meshes as unique_ptrs and move them into the Vault. Capture the returned Handle!
-		auto squareMesh = std::make_unique<Mesh>(renderer.getDevice(), "Square", squareVertices, squareIndices);
-		AssetHandle squareHandle = assetManager.AddMesh("Square", std::move(squareMesh));
-
-		auto myMesh = std::make_unique<Mesh>(renderer.getDevice(), "Cube", cubeVertices, cubeIndices);
-		AssetHandle cubeHandle = assetManager.AddMesh("Cube", std::move(myMesh));
-
-		// 2. Load the texture (this automatically returns an AssetHandle now)
-		AssetHandle statueTexHandle = assetManager.LoadOrCreateTexture(renderer, "Statue Texture", "resources/statue.jpg");
-
-		// 3. Create the Material directly inside the AssetManager. Capture the Handle!
-		AssetHandle statueMatHandle = assetManager.CreateMaterial("Statue Material", statueTexHandle);
-
-		// --- ERSTES OBJEKT ---
-		Entity triangle1 = activeScene.CreateEntity("MainTriangle");
-		// 4. Pass the integer handles directly to the components!
-		triangle1.AddComponent<MeshComponent>(cubeHandle);
-		triangle1.AddComponent<MaterialComponent>(statueMatHandle);
-
-		// Wir holen das Transform und schieben es nach links
-		auto& trans1 = triangle1.GetComponent<TransformComponent>();
-		trans1.Translation = glm::vec3(-1.0f, 0.0f, 0.0f);
-
-		// --- ZWEITES OBJEKT ---
-		Entity triangle2 = activeScene.CreateEntity("SecondTriangle");
-		triangle2.AddComponent<MeshComponent>(cubeHandle);
-		triangle2.AddComponent<MaterialComponent>(statueMatHandle);
-
-		// Wir holen das Transform und schieben es nach rechts
-		auto& trans2 = triangle2.GetComponent<TransformComponent>();
-		trans2.Translation = glm::vec3(1.0f, 0.0f, 0.0f);
 	}
 
 	void mainLoop()
