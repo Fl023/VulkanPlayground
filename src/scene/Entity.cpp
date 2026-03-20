@@ -53,3 +53,47 @@ bool Entity::HasParent() {
     }
     return false;
 }
+
+void Entity::Unlink() {
+    if (!HasComponent<RelationshipComponent>()) return;
+    auto& rel = GetComponent<RelationshipComponent>();
+
+    // Remove this entity from its parent's linked list
+    if (rel.Parent != entt::null) {
+        auto& parentRel = m_Scene->m_Registry.get<RelationshipComponent>(rel.Parent);
+        if (parentRel.FirstChild == m_EntityHandle) {
+            parentRel.FirstChild = rel.NextSibling;
+        }
+    }
+    if (rel.PrevSibling != entt::null) {
+        m_Scene->m_Registry.get<RelationshipComponent>(rel.PrevSibling).NextSibling = rel.NextSibling;
+    }
+    if (rel.NextSibling != entt::null) {
+        m_Scene->m_Registry.get<RelationshipComponent>(rel.NextSibling).PrevSibling = rel.PrevSibling;
+    }
+
+    // Reset this entity's relationship pointers
+    rel.Parent = entt::null;
+    rel.NextSibling = entt::null;
+    rel.PrevSibling = entt::null;
+}
+
+bool Entity::IsDescendantOf(Entity potentialAncestor) {
+    Entity current = GetParent();
+    while (current) {
+        if (current == potentialAncestor) return true;
+        current = current.GetParent();
+    }
+    return false;
+}
+
+void Entity::SetParent(Entity newParent) {
+    // Prevent infinite loops! (Don't parent an entity to itself, or to its own children)
+    if (newParent == *this || newParent.IsDescendantOf(*this)) return;
+
+    Unlink(); // Detach from current parent
+
+    if (newParent) {
+        newParent.AddChild(*this); // Attach to new parent
+    }
+}

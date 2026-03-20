@@ -149,12 +149,16 @@ void SceneHierarchyPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
 
     if (m_Context)
     {
+        // 1. Wrap the entire hierarchy in a Child Window
+        // This takes up all available space and gives us a giant background to drop onto
+        ImGui::BeginChild("HierarchyTree");
+
         auto view = m_Context->m_Registry.view<RelationshipComponent>();
         for (auto entityID : view)
         {
             Entity entity{ entityID , m_Context };
-			const auto& rel = entity.GetComponent<RelationshipComponent>();
-			if (rel.Parent == entt::null)
+            const auto& rel = entity.GetComponent<RelationshipComponent>();
+            if (rel.Parent == entt::null)
                 DrawEntityNode(entity);
         }
 
@@ -168,13 +172,35 @@ void SceneHierarchyPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
                 m_Context->CreateEntity("Empty Entity");
             ImGui::EndPopup();
         }
+
+        ImGui::EndChild(); // <-- End of the Hierarchy list
+
+        // 3. Attach the Drop Target to the entire Child Window we just finished drawing!
+        // This catches any drops that happen "between" the nodes or in the background.
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_HIERARCHY_ENTITY"))
+            {
+                entt::entity droppedEntityHandle = *(const entt::entity*)payload->Data;
+                Entity droppedEntity{ droppedEntityHandle, m_Context };
+
+                // Disconnect from parent, returning it to the root level
+                droppedEntity.Unlink();
+            }
+            ImGui::EndDragDropTarget();
+        }
     }
     ImGui::End();
 
     ImGui::Begin("Properties");
-    if (m_SelectionContext)
+    if (m_Context && m_SelectionContext && m_Context->m_Registry.valid((entt::entity)m_SelectionContext))
     {
         DrawComponents(m_SelectionContext, assetManager, renderer);
+    }
+    else if (m_SelectionContext)
+    {
+        // If it was selected but is no longer valid, clear the selection
+        m_SelectionContext = {};
     }
     ImGui::End();
 }
@@ -199,6 +225,27 @@ void SceneHierarchyPanel::DrawEntityNode(Entity entity)
         m_SelectionContext = entity;
     }
 
+    // --- 1. DRAG SOURCE ---
+    if (ImGui::BeginDragDropSource()) {
+        entt::entity entityHandle = entity;
+        // Attach the entity handle as the payload
+        ImGui::SetDragDropPayload("SCENE_HIERARCHY_ENTITY", &entityHandle, sizeof(entt::entity));
+        ImGui::Text("Move %s", tag.c_str()); // Tooltip next to cursor
+        ImGui::EndDragDropSource();
+    }
+
+    // --- 2. DRAG TARGET ---
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("SCENE_HIERARCHY_ENTITY")) {
+            entt::entity droppedEntityHandle = *(const entt::entity*)payload->Data;
+            Entity droppedEntity{ droppedEntityHandle, m_Context };
+
+            // Set the dropped entity's parent to the entity we are hovering over!
+            droppedEntity.SetParent(entity);
+        }
+        ImGui::EndDragDropTarget();
+    }
+
     bool entityDeleted = false;
     if (ImGui::BeginPopupContextItem())
     {
@@ -214,10 +261,11 @@ void SceneHierarchyPanel::DrawEntityNode(Entity entity)
         // Traverse the linked list of siblings
         while (currentChild != entt::null) {
             Entity childEntity(currentChild, m_Context);
+            entt::entity nextChild = childEntity.GetComponent<RelationshipComponent>().NextSibling;
             DrawEntityNode(childEntity); // Recursion!
 
             // Move to the next child
-            currentChild = childEntity.GetComponent<RelationshipComponent>().NextSibling;
+            currentChild = nextChild;
         }
         ImGui::TreePop();
     }
@@ -250,6 +298,7 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
         DisplayAddComponentEntry<MaterialComponent>("Material");
         DisplayAddComponentEntry<CameraComponent>("Camera");
         DisplayAddComponentEntry<SkyboxComponent>("Skybox");
+        DisplayAddComponentEntry<RelationshipComponent>("Relationship");
         ImGui::EndPopup();
     }
     ImGui::PopItemWidth();
@@ -404,6 +453,32 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
             }
             ImGui::EndCombo();
         }
+    });
+
+    DrawComponent<RelationshipComponent>("Relationship", entity, [this](auto& component)
+    {
+        // Helper lambda to safely get the name of an entity
+        auto getEntityName = [this](entt::entity ent) -> std::string {
+            if (ent == entt::null || !m_Context->m_Registry.valid(ent)) return "None";
+
+            Entity e{ ent, m_Context };
+            if (e.HasComponent<TagComponent>())
+                return e.GetComponent<TagComponent>().Tag;
+
+            return "Unnamed Entity";
+            };
+
+        // Fetch the names of the relationships
+        std::string parentName = getEntityName(component.Parent);
+        std::string firstChildName = getEntityName(component.FirstChild);
+        std::string prevSiblingName = getEntityName(component.PrevSibling);
+        std::string nextSiblingName = getEntityName(component.NextSibling);
+
+        // Display them as read-only text in the UI
+        ImGui::Text("Parent: %s", parentName.c_str());
+        ImGui::Text("First Child: %s", firstChildName.c_str());
+        ImGui::Text("Previous Sibling: %s", prevSiblingName.c_str());
+        ImGui::Text("Next Sibling: %s", nextSiblingName.c_str());
     });
 
 }
