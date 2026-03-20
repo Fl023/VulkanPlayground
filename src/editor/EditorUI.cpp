@@ -131,8 +131,16 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
 
                 // 3. Wenn der Gizmo bewegt wurde, die Matrix wieder in die Component speichern
                 if (ImGuizmo::IsUsing()) {
+                    glm::mat4 localTransform = transform;
+
+                    // Convert the modified World Matrix back into a Local Matrix if it has a parent
+                    if (selectedEntity.HasParent()) {
+                        glm::mat4 parentWorld = selectedEntity.GetParent().GetComponent<TransformComponent>().WorldMatrix;
+                        localTransform = glm::inverse(parentWorld) * transform;
+                    }
+
                     glm::vec3 translation, rotationDegrees, scale;
-                    ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(transform),
+                    ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(localTransform),
                         glm::value_ptr(translation),
                         glm::value_ptr(rotationDegrees),
                         glm::value_ptr(scale));

@@ -43,10 +43,11 @@ public:
     }
 
     void AddChild(Entity child);
-
     Entity GetParent();
-
     bool HasParent();
+    void Unlink();
+    void SetParent(Entity newParent);
+    bool IsDescendantOf(Entity potentialAncestor);
 
     // Hilfskonvertierung: Prüfen, ob die Entity gültig ist
     operator bool() const { return m_EntityHandle != entt::null; }
