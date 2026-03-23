@@ -5,6 +5,7 @@
 class Texture;
 class Material;
 class Mesh;
+class Model;
 class VulkanRenderer;
 
 
@@ -38,6 +39,10 @@ public:
 
     Mesh* GetMesh(const std::string& name) const;
 
+    AssetHandle LoadModel(VulkanRenderer& renderer, const std::string& name, const std::string& filepath);
+    Model* GetModel(AssetHandle handle) const;
+    Model* GetModel(const std::string& name) const;
+
     AssetHandle GetTextureHandle(const std::string& name) const;
 	AssetHandle GetMaterialHandle(const std::string& name) const;
 	AssetHandle GetMeshHandle(const std::string& name) const;
@@ -53,17 +58,15 @@ public:
     void Clear();
 
 private:
-    // Generates a robust, guaranteed non-zero UUID
-    AssetHandle GenerateHandle();
-
-private:
     // --- THE VAULTS (Actual Memory Ownership) ---
     std::unordered_map<AssetHandle, std::unique_ptr<Texture>> m_Textures;
     std::unordered_map<AssetHandle, std::unique_ptr<Material>> m_Materials;
     std::unordered_map<AssetHandle, std::unique_ptr<Mesh>> m_Meshes;
+    std::unordered_map<AssetHandle, std::unique_ptr<Model>> m_Models;
 
     // --- THE REGISTRIES (String to Handle mapping) ---
     std::unordered_map<std::string, AssetHandle> m_TextureRegistry;
     std::unordered_map<std::string, AssetHandle> m_MaterialRegistry;
     std::unordered_map<std::string, AssetHandle> m_MeshRegistry;
+    std::unordered_map<std::string, AssetHandle> m_ModelRegistry;
 };

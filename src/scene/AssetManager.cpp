@@ -2,6 +2,7 @@
 #include "Texture.hpp"
 #include "Material.hpp"
 #include "Mesh.hpp"
+#include "ModelLoader.hpp"
 #include "renderer/VulkanRenderer.hpp"
 
 
@@ -24,7 +25,7 @@ AssetHandle AssetManager::LoadOrCreateTexture(VulkanRenderer& renderer, const st
     }
 
     // 3. Completely new texture: Generate Handle, Allocate, and Register
-    AssetHandle handle = GenerateHandle();
+    AssetHandle handle;
 
     // Allocate on the heap, but give temporary ownership to a local unique_ptr
     auto texture = std::make_unique<Texture>(renderer.getDevice(), filepath);
@@ -47,7 +48,7 @@ AssetHandle AssetManager::LoadCubemap(VulkanRenderer& renderer, const std::strin
         return m_TextureRegistry[name];
     }
 
-    AssetHandle handle = GenerateHandle();
+    AssetHandle handle;
 
     // Use the new Cubemap constructor!
     auto texture = std::make_unique<Texture>(renderer.getDevice(), facePaths);
@@ -64,7 +65,7 @@ AssetHandle AssetManager::CreateMaterial(const std::string& name, AssetHandle al
         return m_MaterialRegistry[name];
     }
 
-    AssetHandle handle = GenerateHandle();
+    AssetHandle handle;
     m_Materials[handle] = std::make_unique<Material>(name, albedoHandle);
     m_MaterialRegistry[name] = handle;
     return handle;
@@ -76,7 +77,7 @@ AssetHandle AssetManager::AddMesh(const std::string& name, std::unique_ptr<Mesh>
         return m_MeshRegistry[name];
     }
 
-    AssetHandle handle = GenerateHandle();
+    AssetHandle handle;
     m_Meshes[handle] = std::move(mesh);
     m_MeshRegistry[name] = handle;
     return handle;
@@ -141,6 +142,27 @@ AssetHandle AssetManager::GetMeshHandle(const std::string& name) const
     return it != m_MeshRegistry.end() ? it->second : INVALID_ASSET_HANDLE;
 }
 
+AssetHandle AssetManager::LoadModel(VulkanRenderer& renderer, const std::string& name, const std::string& filepath) {
+    if (m_ModelRegistry.find(name) != m_ModelRegistry.end()) return m_ModelRegistry[name];
+
+    AssetHandle handle; // Generates random UUID
+    m_Models[handle] = std::make_unique<Model>(renderer, *this, filepath);
+    m_ModelRegistry[name] = handle;
+    return handle;
+}
+
+Model* AssetManager::GetModel(AssetHandle handle) const
+{
+    auto it = m_Models.find(handle);
+    return it != m_Models.end() ? it->second.get() : nullptr;
+}
+
+Model* AssetManager::GetModel(const std::string& name) const
+{
+    auto it = m_ModelRegistry.find(name);
+    return it != m_ModelRegistry.end() ? GetModel(it->second) : nullptr;
+}
+
 void AssetManager::RemoveTexture(VulkanRenderer& renderer, const std::string& name)
 {
     auto it = m_TextureRegistry.find(name);
@@ -200,18 +222,4 @@ void AssetManager::Clear()
     m_Textures.clear();
     m_Materials.clear();
     m_Meshes.clear();
-}
-
-
-AssetHandle AssetManager::GenerateHandle()
-{
-    static std::random_device rd;
-    static std::mt19937_64 eng(rd());
-    static std::uniform_int_distribution<uint64_t> dist;
-
-    AssetHandle handle = dist(eng);
-    while (handle == INVALID_ASSET_HANDLE) {
-        handle = dist(eng); // Make sure we never generate 0
-    }
-    return handle;
 }

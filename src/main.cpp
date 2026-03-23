@@ -70,7 +70,14 @@ private:
 		// 3. Attach the component and pass it the handle
 		skyboxEntity.AddComponent<SkyboxComponent>(skyboxHandle);
 
-		Entity adamHead = ModelLoader::LoadGltf(&activeScene, renderer, assetManager, "resources/adamHead/adamHead.gltf");
+		// 1. Load the Model Asset (Blueprint) into the AssetManager and upload to GPU
+		AssetHandle adamModelHandle = assetManager.LoadModel(renderer, "AdamHead", "resources/adamHead/adamHead.gltf");
+
+		// 2. Retrieve the loaded model blueprint from the vault
+		Model* adamModelBlueprint = assetManager.GetModel(adamModelHandle);
+
+		// 3. Instantiate the blueprint to create actual EnTT entities in your scene
+		Entity adamHead = adamModelBlueprint->Instantiate(&activeScene);
 		adamHead.GetComponent<TransformComponent>().SetEulerAngles(glm::vec3(0.0f, glm::radians(180.0f), 0.0f));
 		adamHead.GetComponent<TransformComponent>().Scale = glm::vec3(0.5f);
 
