@@ -9,7 +9,6 @@ public:
 
     const std::string& GetName() const { return m_Name; }
 
-    // Getters and Setters now just pass a 64-bit integer!
     AssetHandle GetTextureHandle() const { return m_AlbedoHandle; }
     void SetTextureHandle(AssetHandle handle) { m_AlbedoHandle = handle; }
 

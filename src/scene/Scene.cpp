@@ -6,6 +6,7 @@
 Entity Scene::CreateEntity(const std::string& name) {
     Entity entity(m_Registry.create(), this);
 
+	entity.AddComponent<IDComponent>();
     entity.AddComponent<TransformComponent>();
     entity.AddComponent<RelationshipComponent>();
     auto& tag = entity.AddComponent<TagComponent>();

@@ -10,6 +10,8 @@ public:
     
     // For deserializing an existing UUID
     UUID(uint64_t high, uint64_t low);
+
+    UUID(const std::string& hexString);
     
     UUID(const UUID&) = default;
 
@@ -21,6 +23,8 @@ public:
     bool operator!=(const UUID& other) const {
         return !(*this == other);
     }
+
+    std::string ToString() const;
 
     uint64_t GetHigh() const { return m_High; }
     uint64_t GetLow() const { return m_Low; }

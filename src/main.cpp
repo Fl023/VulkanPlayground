@@ -5,7 +5,8 @@
 #include "core/Input.hpp"
 #include "scene/AssetManager.hpp"
 #include "editor/EditorUI.hpp"
-#include "scene/ModelLoader.hpp"
+#include "scene/Model.hpp"
+#include "scene/SceneSerializer.hpp"
 
 
 class HelloTriangleApplication
@@ -36,50 +37,58 @@ private:
 
 	void initScene()
 	{
-		Entity cameraEntity = activeScene.CreateEntity("MainCamera");
-		float aspect = (float)renderer.getWindow().getWidth() / (float)renderer.getWindow().getHeight();
-		mainCamera.SetPerspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
-		auto& cam = cameraEntity.AddComponent<CameraComponent>(mainCamera);
-		auto& trans = cameraEntity.GetComponent<TransformComponent>();
-
-		trans.Translation = glm::vec3(2.0f, 2.0f, 2.0f);
-
-		glm::vec3 direction = glm::normalize(glm::vec3(0.0f) - trans.Translation);
-		trans.SetRotation(glm::quatLookAt(direction, glm::vec3(0.0f, 1.0f, 0.0f)));
-
-
 		assetManager.AddMesh("Cube", std::make_unique<Mesh>(renderer.getDevice(), "Cube", cubeVertices, cubeIndices));
 		assetManager.AddMesh("Square", std::make_unique<Mesh>(renderer.getDevice(), "Square", squareVertices, squareIndices));
 
+		SceneSerializer serializer(&activeScene, &assetManager);
+		serializer.Deserialize("testScene.yaml", renderer);
 
-		std::array<std::string, 6> skyboxFaces = {
-		"resources/skyboxes/Plants/posx.jpg", // +X
-		"resources/skyboxes/Plants/negx.jpg", // -X
-		"resources/skyboxes/Plants/posy.jpg", // +Y
-		"resources/skyboxes/Plants/negy.jpg", // -Y
-		"resources/skyboxes/Plants/posz.jpg", // +Z
-		"resources/skyboxes/Plants/negz.jpg"  // -Z
-		};
+		//Entity cameraEntity = activeScene.CreateEntity("MainCamera");
+		//float aspect = (float)renderer.getWindow().getWidth() / (float)renderer.getWindow().getHeight();
+		//mainCamera.SetPerspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
+		//auto& cam = cameraEntity.AddComponent<CameraComponent>(mainCamera);
+		//auto& trans = cameraEntity.GetComponent<TransformComponent>();
 
-		// 1. Ask the AssetManager to load the 6 images into a single Cubemap texture
-		AssetHandle skyboxHandle = assetManager.LoadCubemap(renderer, "DefaultSkybox", skyboxFaces);
+		//trans.Translation = glm::vec3(2.0f, 2.0f, 2.0f);
 
-		// 2. Create an entity to hold the skybox in the scene
-		Entity skyboxEntity = activeScene.CreateEntity("Skybox");
+		//glm::vec3 direction = glm::normalize(glm::vec3(0.0f) - trans.Translation);
+		//trans.SetRotation(glm::quatLookAt(direction, glm::vec3(0.0f, 1.0f, 0.0f)));
 
-		// 3. Attach the component and pass it the handle
-		skyboxEntity.AddComponent<SkyboxComponent>(skyboxHandle);
 
-		// 1. Load the Model Asset (Blueprint) into the AssetManager and upload to GPU
-		AssetHandle adamModelHandle = assetManager.LoadModel(renderer, "AdamHead", "resources/adamHead/adamHead.gltf");
 
-		// 2. Retrieve the loaded model blueprint from the vault
-		Model* adamModelBlueprint = assetManager.GetModel(adamModelHandle);
 
-		// 3. Instantiate the blueprint to create actual EnTT entities in your scene
-		Entity adamHead = adamModelBlueprint->Instantiate(&activeScene);
-		adamHead.GetComponent<TransformComponent>().SetEulerAngles(glm::vec3(0.0f, glm::radians(180.0f), 0.0f));
-		adamHead.GetComponent<TransformComponent>().Scale = glm::vec3(0.5f);
+
+		//std::array<std::string, 6> skyboxFaces = {
+		//"resources/skyboxes/Plants/posx.jpg", // +X
+		//"resources/skyboxes/Plants/negx.jpg", // -X
+		//"resources/skyboxes/Plants/posy.jpg", // +Y
+		//"resources/skyboxes/Plants/negy.jpg", // -Y
+		//"resources/skyboxes/Plants/posz.jpg", // +Z
+		//"resources/skyboxes/Plants/negz.jpg"  // -Z
+		//};
+
+		//// 1. Ask the AssetManager to load the 6 images into a single Cubemap texture
+		//AssetHandle skyboxHandle = assetManager.LoadCubemap(renderer, "DefaultSkybox", skyboxFaces);
+
+		//// 2. Create an entity to hold the skybox in the scene
+		//Entity skyboxEntity = activeScene.CreateEntity("Skybox");
+
+		//// 3. Attach the component and pass it the handle
+		//skyboxEntity.AddComponent<SkyboxComponent>(skyboxHandle);
+
+		//// 1. Load the Model Asset (Blueprint) into the AssetManager and upload to GPU
+		//AssetHandle adamModelHandle = assetManager.LoadModel(renderer, "AdamHead", "resources/adamHead/adamHead.gltf");
+
+		//// 2. Retrieve the loaded model blueprint from the vault
+		//Model* adamModelBlueprint = assetManager.GetModel(adamModelHandle);
+
+		//// 3. Instantiate the blueprint to create actual EnTT entities in your scene
+		//Entity adamHead = adamModelBlueprint->Instantiate(&activeScene, adamModelHandle);
+		//adamHead.GetComponent<TransformComponent>().SetEulerAngles(glm::vec3(0.0f, glm::radians(180.0f), 0.0f));
+		//adamHead.GetComponent<TransformComponent>().Scale = glm::vec3(0.5f);
+
+		//SceneSerializer serializer(&activeScene, &assetManager);
+		//serializer.Serialize("testScene.yaml");
 
 	}
 

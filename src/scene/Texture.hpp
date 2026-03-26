@@ -16,6 +16,7 @@ public:
     }
 
     const std::string& GetFilePath() const { return m_FilePath; }
+    const std::vector<std::string>& GetFilePaths() const { return m_Filepaths; }
 
     void SetBindlessIndex(uint32_t index) { m_BindlessIndex = index; }
     uint32_t GetBindlessIndex() const { return m_BindlessIndex; }
@@ -29,6 +30,7 @@ private:
 
 private:
     std::string m_FilePath;
+	std::vector<std::string> m_Filepaths;
     const VulkanDevice& m_device;
     std::optional<VulkanImage> m_Image;
     uint32_t m_mipLevels;

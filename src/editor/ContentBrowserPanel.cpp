@@ -47,7 +47,7 @@ void ContentBrowserPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
     for (auto& directoryEntry : m_DirectoryEntries)
     {
         const auto& path = directoryEntry.path();
-        std::string filenameString = path.filename().string();
+        std::string filenameString = path.filename().generic_string();
 
         ImGui::PushID(filenameString.c_str());
 
@@ -121,8 +121,8 @@ void ContentBrowserPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
 
                 if (texturePath.extension() == ".png" || texturePath.extension() == ".jpg")
                 {
-                    newTextureName = texturePath.stem().string();
-                    newTexturePath = texturePath.string();
+                    newTextureName = texturePath.stem().generic_string();
+                    newTexturePath = texturePath.generic_string();
                 }
             }
             ImGui::EndDragDropTarget();
@@ -182,7 +182,7 @@ void ContentBrowserPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
                     std::filesystem::path texturePath(path);
 
                     if (texturePath.extension() == ".png" || texturePath.extension() == ".jpg") {
-                        facePaths[i] = texturePath.string();
+                        facePaths[i] = texturePath.generic_string();
                     }
                 }
                 ImGui::EndDragDropTarget();

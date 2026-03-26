@@ -24,7 +24,7 @@ Texture::Texture(const VulkanDevice& device, uint32_t width, uint32_t height, co
 }
 
 Texture::Texture(const VulkanDevice& device, const std::array<std::string, 6>& facePaths)
-    : m_device(device), m_FilePath(facePaths[0]), m_mipLevels(1), m_IsCubemap(true)
+    : m_device(device), m_FilePath(facePaths[0]), m_Filepaths(facePaths.begin(), facePaths.end()), m_mipLevels(1), m_IsCubemap(true)
 {
     stbi_uc* pixels[6];
     int texChannels;

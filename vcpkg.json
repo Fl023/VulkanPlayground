@@ -15,6 +15,7 @@
       ]
     },
     "imguizmo",
-    "tinygltf"
+    "tinygltf",
+    "yaml-cpp"
   ]
 }

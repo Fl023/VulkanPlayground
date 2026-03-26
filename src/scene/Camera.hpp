@@ -18,6 +18,7 @@ public:
 	const glm::mat4& GetViewMatrix() const { return m_ViewMatrix; }
 	const glm::mat4& GetViewProjectionMatrix() const { return m_ViewProjectionMatrix; }
 
+	std::string GetName() const { return m_Name; }
 	float GetPerspectiveVerticalFOV() const { return m_PerspectiveFOV; }
 	float GetOrthographicSize() const { return m_OrthographicSize; }
 	float GetAspectRatio() const { return m_AspectRatio; }

@@ -303,6 +303,12 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
     }
     ImGui::PopItemWidth();
 
+    DrawComponent<IDComponent>("ID", entity, [](auto& component)
+    {
+        ImGui::Text("UUID: %016llx%016llx", component.ID.GetHigh(), component.ID.GetLow());
+	});
+
+
     DrawComponent<TransformComponent>("Transform", entity, [](auto& component)
     {
         DrawVec3Control("Translation", component.Translation);

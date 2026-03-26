@@ -88,6 +88,13 @@ struct MaterialComponent {
     MaterialComponent(AssetHandle handle) : MaterialHandle(handle) {}
 };
 
+struct ModelInstanceComponent {
+    AssetHandle ModelHandle = INVALID_ASSET_HANDLE;
+
+    ModelInstanceComponent() = default;
+    ModelInstanceComponent(AssetHandle handle) : ModelHandle(handle) {}
+};
+
 struct CameraComponent {
     Camera SceneCamera;
     bool Primary = true;
