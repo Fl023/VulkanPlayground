@@ -83,4 +83,8 @@ void Scene::OnUpdate(float deltaTime)
     }
 }
 
+void Scene::Clear() {
+    m_Registry.clear();
+}
+
 

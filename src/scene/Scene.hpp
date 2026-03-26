@@ -16,6 +16,8 @@ public:
 
     void DestroyEntity(Entity entity);
 
+	void Clear();
+
     // Wir machen die Registry public für das RenderSystem (einfacher für den Anfang)
     entt::registry m_Registry;
 

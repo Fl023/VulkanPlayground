@@ -1,5 +1,6 @@
 #include "EditorUI.hpp"
 #include "scene/Components.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "FileDialogs.hpp"
 
 
@@ -17,7 +18,8 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
     ImGuiWindowFlags dockspace_flags = ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
-        ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+        ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground |
+        ImGuiWindowFlags_MenuBar;
 
     // Remove all padding and borders so it sits perfectly flush with the OS window
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
@@ -26,6 +28,54 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
 
     ImGui::Begin("Main Editor Dockspace", nullptr, dockspace_flags);
     ImGui::PopStyleVar(3); // Pop the styles immediately
+
+    // ==========================================
+    // 2. THE MAIN MENU BAR
+    // ==========================================
+    if (ImGui::BeginMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+
+            // --- OPEN SCENE (Clears current scene) ---
+            if (ImGui::MenuItem("Open Scene...")) {
+                std::string filepath = FileDialogs::OpenFile("Scene File (*.yaml)\0*.yaml\0");
+                if (!filepath.empty()) {
+                    scene.Clear(); // Destroys old entities!
+
+                    SceneSerializer serializer(&scene, &assetManager);
+                    serializer.Deserialize(filepath, renderer);
+                }
+            }
+
+            // --- MERGE SCENE (Additive Loading) ---
+            if (ImGui::MenuItem("Merge Scene...")) {
+                std::string filepath = FileDialogs::OpenFile("Scene File (*.yaml)\0*.yaml\0");
+                if (!filepath.empty()) {
+                    // WE DO NOT CLEAR THE SCENE HERE!
+                    SceneSerializer serializer(&scene, &assetManager);
+                    serializer.Deserialize(filepath, renderer);
+                }
+            }
+
+            // --- SAVE SCENE ---
+            if (ImGui::MenuItem("Save Scene As...")) {
+                std::string filepath = FileDialogs::SaveFile("Scene File (*.yaml)\0*.yaml\0");
+                if (!filepath.empty()) {
+                    SceneSerializer serializer(&scene, &assetManager);
+                    serializer.Serialize(filepath);
+                }
+            }
+
+            ImGui::Separator();
+
+            // --- EXIT ---
+            if (ImGui::MenuItem("Exit")) {
+                // You might need to add a callback here to tell your Application to close
+            }
+
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenuBar();
+    }
 
     // Submit the DockSpace API!
     ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");

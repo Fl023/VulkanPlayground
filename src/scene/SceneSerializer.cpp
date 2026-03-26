@@ -392,6 +392,15 @@ bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& r
 	auto entitiesNode = data["Entities"];
 	if (!entitiesNode) return true;
 
+	bool sceneHasPrimaryCamera = false;
+	auto cameraView = m_Scene->m_Registry.view<CameraComponent>();
+	for (auto entity : cameraView) {
+		if (cameraView.get<CameraComponent>(entity).Primary) {
+			sceneHasPrimaryCamera = true;
+			break;
+		}
+	}
+
 	// Temporary dictionary to hold the EnTT handles while we rebuild the tree
 	std::unordered_map<UUID, entt::entity> spawnedEntities;
 	UUID invalidUUID = { 0, 0 };
@@ -421,7 +430,20 @@ bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& r
 		// Load Camera
 		if (auto cameraCompNode = entityNode["CameraComponent"]) {
 			auto& cc = spawnedEntity.AddComponent<CameraComponent>();
-			cc.Primary = cameraCompNode["Primary"].as<bool>();
+			bool savedAsPrimary = cameraCompNode["Primary"].as<bool>();
+
+			// BUG FIX: Prevent multiple primary cameras!
+			if (savedAsPrimary && sceneHasPrimaryCamera) {
+				cc.Primary = false; // Downgrade to secondary
+				std::cout << "Notice: A Primary Camera already exists. Loaded camera downgraded to secondary.\n";
+			}
+			else if (savedAsPrimary) {
+				cc.Primary = true;
+				sceneHasPrimaryCamera = true; // Mark that we now have one!
+			}
+			else {
+				cc.Primary = false;
+			}
 			cc.FixedAspectRatio = cameraCompNode["FixedAspectRatio"].as<bool>();
 
 			if (auto cameraNode = cameraCompNode["Camera"]) {

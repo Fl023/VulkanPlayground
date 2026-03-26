@@ -31,3 +31,31 @@ std::string FileDialogs::OpenFile(const char* filter)
 
     return std::string(); // Leerer String, wenn der User auf "Abbrechen" drückt
 }
+
+std::string FileDialogs::SaveFile(const char* filter)
+{
+    OPENFILENAMEA ofn;
+    CHAR szFile[260] = { 0 };
+
+    ZeroMemory(&ofn, sizeof(OPENFILENAME));
+    ofn.lStructSize = sizeof(OPENFILENAME);
+
+    ofn.hwndOwner = nullptr;
+
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+    ofn.lpstrFilter = filter;
+    ofn.nFilterIndex = 1;
+
+    // OFN_OVERWRITEPROMPT pops up a warning if the user selects an existing file to overwrite!
+    // OFN_FILEMUSTEXIST is removed because we are creating a new file.
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR;
+
+    // Use GetSaveFileNameA instead of GetOpenFileNameA
+    if (GetSaveFileNameA(&ofn) == TRUE)
+    {
+        return ofn.lpstrFile;
+    }
+
+    return std::string(); // Returns empty string if the user clicks "Cancel"
+}
