@@ -15,10 +15,10 @@ bool Input::IsKeyPressed(KeyCode key)
     return state == GLFW_PRESS || state == GLFW_REPEAT;
 }
 
-bool Input::IsMouseButtonPressed(int button)
+bool Input::IsMouseButtonPressed(MouseCode button)
 {
     if (!s_Window) return false;
-    auto state = glfwGetMouseButton(s_Window, button);
+    auto state = glfwGetMouseButton(s_Window, static_cast<int>(button));
     return state == GLFW_PRESS;
 }
 

@@ -1,0 +1,21 @@
+// This file is not a traditional header. It is meant to be included multiple times
+// by the same file, with the KEY macro defined differently each time. This is an
+// application of the "X-Macro" pattern.
+
+// Format: KEY(name, glfw_value)
+
+// Unique mouse codes
+KEY(Button1,              0)
+KEY(Button2,              1)
+KEY(Button3,              2)
+KEY(Button4,              3)
+KEY(Button5,              4)
+KEY(Button6,              5)
+KEY(Button7,              6)
+KEY(Button8,              7)
+
+// Aliases
+KEY_ALIAS(ButtonLast,     Button8)
+KEY_ALIAS(ButtonLeft,     Button1)
+KEY_ALIAS(ButtonRight,    Button2)
+KEY_ALIAS(ButtonMiddle,   Button3)

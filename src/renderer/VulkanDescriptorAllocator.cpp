@@ -1,8 +1,12 @@
 #include "VulkanDescriptorAllocator.hpp"
 
 
-DescriptorAllocator::DescriptorAllocator(const vk::raii::Device& device, uint32_t initialSets, std::vector<vk::DescriptorPoolSize> poolSizes)
-    : m_device(device), m_setsPerPool(initialSets), m_poolSizes(std::move(poolSizes)) 
+DescriptorAllocator::DescriptorAllocator(
+    const vk::raii::Device& device, 
+    uint32_t initialSets, 
+    std::vector<vk::DescriptorPoolSize> poolSizes,
+    vk::DescriptorPoolCreateFlags flags)
+    : m_device(device), m_setsPerPool(initialSets), m_poolSizes(std::move(poolSizes)), m_poolFlags(flags)
 {
     m_readyPools.push_back(create_pool());
 }
@@ -58,7 +62,7 @@ vk::raii::DescriptorPool* DescriptorAllocator::get_pool() {
 
 vk::raii::DescriptorPool DescriptorAllocator::create_pool() {
     vk::DescriptorPoolCreateInfo poolInfo{
-        .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        .flags = m_poolFlags,
         .maxSets = m_setsPerPool,
         .poolSizeCount = static_cast<uint32_t>(m_poolSizes.size()),
         .pPoolSizes = m_poolSizes.data()

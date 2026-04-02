@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <random>
 #include <functional>
+#include <mutex>
 
 #include <vulkan/vulkan_raii.hpp>
 #include <vulkan/vulkan_profiles.hpp>

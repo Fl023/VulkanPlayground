@@ -9,135 +9,56 @@
 #include "scene/SceneSerializer.hpp"
 
 
-class HelloTriangleApplication
-{
-public:
-	HelloTriangleApplication()
-		: mainWindow(1920, 1080, "Vulkan Engine"),
-		renderer(mainWindow), mainCamera("Main Camera")
-	{
-		Input::Init(mainWindow.getNativeWindow());
-	}
+#include "core/Application.hpp"
 
-	void run()
-	{
-		initScene();
-		mainLoop();
-		cleanup();
-	}
+class GameLayer : public Layer
+{
+	public:
+	GameLayer() : Layer("Game Layer") {}
+	~GameLayer() = default;
+	virtual void OnAttach() override {}
+	virtual void OnDetach() override {}
+	virtual void OnUpdate(Timestep ts) override {}
+	virtual void OnImGuiRender() override {}
+	virtual void OnEvent(Event& event) override {}
+};
+
+class EditorLayer : public Layer
+{
+	public:
+	EditorLayer(Scene* scene, AssetManager* assetManager, VulkanRenderer* renderer) 
+		: Layer("Editor Layer"), m_CurrentScene(scene), m_AssetManager(assetManager), m_Renderer(renderer) {}
+	~EditorLayer() = default;
+	virtual void OnAttach() override {}
+	virtual void OnDetach() override {}
+	virtual void OnUpdate(Timestep ts) override {}
+	virtual void OnImGuiRender() override { m_EditorUI.Draw(*m_CurrentScene, *m_AssetManager, *m_Renderer); }
+	virtual void OnEvent(Event& event) override {}
 
 private:
-	VulkanWindow mainWindow;
-	VulkanRenderer renderer;
-	Scene activeScene;
-	Camera mainCamera;
+	EditorUI m_EditorUI;
+	Scene* m_CurrentScene = nullptr;
+	AssetManager* m_AssetManager = nullptr;
+	VulkanRenderer* m_Renderer = nullptr;
+};
 
-	AssetManager assetManager;
-	EditorUI editorUI;
-
-	void initScene()
+class Sandbox : public Application
+{
+	public:
+	Sandbox() : Application("Vulkan Engine Sandbox") 
 	{
-		assetManager.AddMesh("Cube", std::make_unique<Mesh>(renderer.getDevice(), "Cube", cubeVertices, cubeIndices));
-		assetManager.AddMesh("Square", std::make_unique<Mesh>(renderer.getDevice(), "Square", squareVertices, squareIndices));
-
-		SceneSerializer serializer(&activeScene, &assetManager);
-		serializer.Deserialize("testScene.yaml", renderer);
-
-		//Entity cameraEntity = activeScene.CreateEntity("MainCamera");
-		//float aspect = (float)renderer.getWindow().getWidth() / (float)renderer.getWindow().getHeight();
-		//mainCamera.SetPerspective(glm::radians(45.0f), aspect, 0.1f, 10.0f);
-		//auto& cam = cameraEntity.AddComponent<CameraComponent>(mainCamera);
-		//auto& trans = cameraEntity.GetComponent<TransformComponent>();
-
-		//trans.Translation = glm::vec3(2.0f, 2.0f, 2.0f);
-
-		//glm::vec3 direction = glm::normalize(glm::vec3(0.0f) - trans.Translation);
-		//trans.SetRotation(glm::quatLookAt(direction, glm::vec3(0.0f, 1.0f, 0.0f)));
-
-
-
-
-
-		//std::array<std::string, 6> skyboxFaces = {
-		//"resources/skyboxes/Plants/posx.jpg", // +X
-		//"resources/skyboxes/Plants/negx.jpg", // -X
-		//"resources/skyboxes/Plants/posy.jpg", // +Y
-		//"resources/skyboxes/Plants/negy.jpg", // -Y
-		//"resources/skyboxes/Plants/posz.jpg", // +Z
-		//"resources/skyboxes/Plants/negz.jpg"  // -Z
-		//};
-
-		//// 1. Ask the AssetManager to load the 6 images into a single Cubemap texture
-		//AssetHandle skyboxHandle = assetManager.LoadCubemap(renderer, "DefaultSkybox", skyboxFaces);
-
-		//// 2. Create an entity to hold the skybox in the scene
-		//Entity skyboxEntity = activeScene.CreateEntity("Skybox");
-
-		//// 3. Attach the component and pass it the handle
-		//skyboxEntity.AddComponent<SkyboxComponent>(skyboxHandle);
-
-		//// 1. Load the Model Asset (Blueprint) into the AssetManager and upload to GPU
-		//AssetHandle adamModelHandle = assetManager.LoadModel(renderer, "AdamHead", "resources/adamHead/adamHead.gltf");
-
-		//// 2. Retrieve the loaded model blueprint from the vault
-		//Model* adamModelBlueprint = assetManager.GetModel(adamModelHandle);
-
-		//// 3. Instantiate the blueprint to create actual EnTT entities in your scene
-		//Entity adamHead = adamModelBlueprint->Instantiate(&activeScene, adamModelHandle);
-		//adamHead.GetComponent<TransformComponent>().SetEulerAngles(glm::vec3(0.0f, glm::radians(180.0f), 0.0f));
-		//adamHead.GetComponent<TransformComponent>().Scale = glm::vec3(0.5f);
-
-		//SceneSerializer serializer(&activeScene, &assetManager);
-		//serializer.Serialize("testScene.yaml");
-
+		PushLayer(new GameLayer());
+		PushOverlay(new EditorLayer(&GetActiveScene(), &GetAssetManager(), &GetRenderer()));
 	}
-
-	void mainLoop()
-	{
-		static auto startTime = std::chrono::high_resolution_clock::now();
-		static auto lastFrameTime = startTime;
-
-		while (!renderer.getWindow().shouldClose())
-		{
-			renderer.getWindow().pollEvents();
-
-			auto currentTime = std::chrono::high_resolution_clock::now();
-			float deltaTime = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - lastFrameTime).count();
-			lastFrameTime = currentTime;
-
-			// --- 1. SPIELLOGIK ---
-			activeScene.OnUpdate(deltaTime);
-
-			// --- 2. UI ZEICHNEN ---
-			renderer.beginUI();
-			editorUI.Draw(activeScene, assetManager, renderer);
-
-			// --- 3. RENDERN ---
-			renderer.drawFrame(activeScene, assetManager);
-
-			// --- VIEWPORTS UPDATEN ---
-			if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-			{
-				ImGui::UpdatePlatformWindows();
-				ImGui::RenderPlatformWindowsDefault();
-			}
-		}
-
-		renderer.getDevice().getDevice().waitIdle();
-		assetManager.Clear();
-	}
-
-	void cleanup()
-	{
-	}
+	~Sandbox() = default;
 };
 
 int main()
 {
 	try
 	{
-		HelloTriangleApplication app;
-		app.run();
+		Sandbox app;
+		app.Run();
 	}
 	catch (const std::exception& e)
 	{

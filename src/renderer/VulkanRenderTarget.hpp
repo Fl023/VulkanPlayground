@@ -18,9 +18,9 @@ public:
     uint32_t GetHeight() const { return m_Height; }
 
     // Provide the raw images for Dynamic Rendering
-    const VulkanImage& GetColorImage() const { return *m_ColorImage; }
-    const VulkanImage& GetDepthImage() const { return *m_DepthImage; }
-    const VulkanImage& GetResolveImage() const { return *m_ResolveImage; }
+    VulkanImage& GetColorImage() const { return *m_ColorImage; }
+    VulkanImage& GetDepthImage() const { return *m_DepthImage; }
+    VulkanImage& GetResolveImage() const { return *m_ResolveImage; }
     
     vk::DescriptorSet GetImGuiTextureID() const { return m_ImGuiDescriptorSet; }
 

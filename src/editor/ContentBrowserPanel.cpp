@@ -2,6 +2,7 @@
 #include "FileDialogs.hpp" // Für deinen Datei-Dialog
 #include <imgui.h>
 #include <imgui_stdlib.h>
+#include "scene/Material.hpp"
 
 ContentBrowserPanel::ContentBrowserPanel()
 {
@@ -102,7 +103,7 @@ void ContentBrowserPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
 
             // Free the bindless index before destroying the memory
             Texture* tex = assetManager.GetTexture(textureToDelete);
-            if (tex) renderer.FreeBindlessIndex(tex->GetBindlessIndex());
+            if (tex) renderer.FreeBindlessIndex(tex->GetBindlessIndex(), tex->IsCubemap());
 
             assetManager.RemoveTexture(renderer, textureToDelete);
         }
@@ -284,7 +285,9 @@ void ContentBrowserPanel::OnImGuiRender(AssetManager& assetManager, VulkanRender
 
         if (ImGui::Button("Create Material")) {
             if (!newMatName.empty()) {
-                assetManager.CreateMaterial(newMatName, selectedAlbedo);
+                MaterialRenderState state{};
+                vk::Format targetFormat = renderer.GetSwapchainFormat();
+                assetManager.CreateMaterial(renderer, newMatName, state, targetFormat, selectedAlbedo);
                 selectedAlbedo = INVALID_ASSET_HANDLE;
                 newMatName = "NewMaterial";
             }

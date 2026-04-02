@@ -137,7 +137,7 @@ int32_t Model::ProcessNode(const tinygltf::Model& model, int gltf_node_index, in
             const auto& primitive = mesh.primitives[0];
 
             std::vector<Vertex> vertices;
-            std::vector<uint16_t> indices;
+            std::vector<uint32_t> indices;
             ExtractPrimitiveGeometry(model, primitive, vertices, indices);
 
             auto vulkanMesh = std::make_unique<Mesh>(m_Renderer.getDevice(), m_Nodes[currentNodeIndex].Name, vertices, indices);
@@ -156,7 +156,7 @@ int32_t Model::ProcessNode(const tinygltf::Model& model, int gltf_node_index, in
                 std::string prim_name = m_Nodes[currentNodeIndex].Name + "_Prim" + std::to_string(primitive_index);
 
                 std::vector<Vertex> vertices;
-                std::vector<uint16_t> indices;
+                std::vector<uint32_t> indices;
                 ExtractPrimitiveGeometry(model, primitive, vertices, indices);
 
                 auto vulkanMesh = std::make_unique<Mesh>(m_Renderer.getDevice(), prim_name, vertices, indices);
@@ -260,7 +260,29 @@ std::vector<AssetHandle> Model::ExtractMaterials(const tinygltf::Model& model, c
             }
         }
 
-        AssetHandle matHandle = m_AssetManager.CreateMaterial(matName, albedoHandle);
+        MaterialRenderState state{};
+
+        // 1. Read glTF Culling (Double Sided)
+        if (gltfMat.doubleSided) {
+            state.Culling = CullMode::None;
+        }
+
+        // 2. Read glTF Blending (Transparency)
+        if (gltfMat.alphaMode == "BLEND") {
+            state.Blending = BlendMode::AlphaBlend;
+            state.Depth = DepthState::ReadOnly; // Transparent objects usually don't write to depth!
+        }
+        else if (gltfMat.alphaMode == "MASK") {
+            // Alpha clipping usually remains opaque but discards pixels in the shader
+            state.Blending = BlendMode::Opaque;
+        }
+
+        // 3. Get the target format (Assuming your Viewport uses the Swapchain format)
+        vk::Format targetFormat = m_Renderer.GetSwapchainFormat();
+
+        // 4. Create the material using the NEW signature!
+        AssetHandle matHandle = m_AssetManager.CreateMaterial(m_Renderer, matName, state, targetFormat, albedoHandle);
+
         materialHandles.push_back(matHandle);
     }
 
@@ -270,7 +292,7 @@ std::vector<AssetHandle> Model::ExtractMaterials(const tinygltf::Model& model, c
 // ==========================================================================================
 // HELPER: Extracts raw geometry data from a glTF Primitive
 // ==========================================================================================
-void Model::ExtractPrimitiveGeometry(const tinygltf::Model& model, const tinygltf::Primitive& primitive, std::vector<Vertex>& out_vertices, std::vector<uint16_t>& out_indices) {
+void Model::ExtractPrimitiveGeometry(const tinygltf::Model& model, const tinygltf::Primitive& primitive, std::vector<Vertex>& out_vertices, std::vector<uint32_t>& out_indices) {
     const float* positionData = nullptr;
     const float* texCoordData = nullptr;
     size_t vertexCount = 0;
@@ -310,15 +332,15 @@ void Model::ExtractPrimitiveGeometry(const tinygltf::Model& model, const tinyglt
 
         if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) {
             const uint16_t* indices = static_cast<const uint16_t*>(dataPtr);
-            for (size_t i = 0; i < indexAccessor.count; ++i) out_indices.push_back(indices[i]);
+            for (size_t i = 0; i < indexAccessor.count; ++i) out_indices.push_back(static_cast<uint32_t>(indices[i]));
         }
         else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT) {
             const uint32_t* indices = static_cast<const uint32_t*>(dataPtr);
-            for (size_t i = 0; i < indexAccessor.count; ++i) out_indices.push_back(static_cast<uint16_t>(indices[i]));
+            for (size_t i = 0; i < indexAccessor.count; ++i) out_indices.push_back(indices[i]);
         }
         else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE) {
             const uint8_t* indices = static_cast<const uint8_t*>(dataPtr);
-            for (size_t i = 0; i < indexAccessor.count; ++i) out_indices.push_back(static_cast<uint16_t>(indices[i]));
+            for (size_t i = 0; i < indexAccessor.count; ++i) out_indices.push_back(static_cast<uint32_t>(indices[i]));
         }
     }
 }

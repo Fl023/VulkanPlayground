@@ -1,13 +1,14 @@
 #pragma once
 
 #include "AssetHandle.hpp"
+#include "Mesh.hpp"
+#include "Texture.hpp"
+#include "Material.hpp"
+#include "Model.hpp"
 
-class Texture;
-class Material;
-class Mesh;
-class Model;
+#include "renderer/VulkanPipeline.hpp"
+
 class VulkanRenderer;
-
 
 class AssetManager
 {
@@ -25,8 +26,8 @@ public:
     AssetHandle LoadCubemap(VulkanRenderer& renderer, const std::string& name, const std::array<std::string, 6>& facePaths);
 	AssetHandle LoadCubemapWithHandle(AssetHandle handle, VulkanRenderer& renderer, const std::string& name, const std::array<std::string, 6>& facePaths);
 
-    AssetHandle CreateMaterial(const std::string& name, AssetHandle albedoHandle);
-    AssetHandle CreateMaterialWithHandle(AssetHandle handle, const std::string& name, AssetHandle albedoHandle);
+    AssetHandle CreateMaterial(VulkanRenderer& renderer, const std::string& name, const MaterialRenderState& state, vk::Format targetFormat, AssetHandle albedoHandle);
+    AssetHandle CreateMaterialWithHandle(AssetHandle handle, VulkanRenderer& renderer, const std::string& name, const MaterialRenderState& state, vk::Format targetFormat, AssetHandle albedoHandle);
 
     AssetHandle AddMesh(const std::string& name, std::unique_ptr<Mesh> mesh);
     AssetHandle AddMeshWithHandle(AssetHandle handle, const std::string& name, std::unique_ptr<Mesh> mesh);
@@ -68,11 +69,16 @@ public:
     void Clear();
 
 private:
+    VulkanPipeline* GetOrCreatePipeline(VulkanRenderer& renderer, const MaterialRenderState& state, vk::Format targetFormat);
+
+private:
     // --- THE VAULTS (Actual Memory Ownership) ---
     std::unordered_map<AssetHandle, std::unique_ptr<Texture>> m_Textures;
     std::unordered_map<AssetHandle, std::unique_ptr<Material>> m_Materials;
     std::unordered_map<AssetHandle, std::unique_ptr<Mesh>> m_Meshes;
     std::unordered_map<AssetHandle, std::unique_ptr<Model>> m_Models;
+
+    std::unordered_map<std::string, std::unique_ptr<VulkanPipeline>> m_PipelineCache;
 
     // --- THE REGISTRIES (String to Handle mapping) ---
     std::unordered_map<std::string, AssetHandle> m_TextureRegistry;

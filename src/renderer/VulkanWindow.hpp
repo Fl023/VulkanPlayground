@@ -4,10 +4,13 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 class VulkanRenderer;
+class Event;
 
 class VulkanWindow
 {
 public:
+    using EventCallbackFn = std::function<void(std::unique_ptr<Event>)>;
+
     VulkanWindow(uint32_t width, uint32_t height, const std::string& title);
     ~VulkanWindow();
 
@@ -22,13 +25,20 @@ public:
 	float getHeight() const;
     GLFWwindow* getNativeWindow() const { return window; }
 
-    static void framebufferResizeCallback(GLFWwindow* window, int width, int height);
+    void SetEventCallback(const EventCallbackFn& callback) { m_Data.EventCallback = callback; }
 
-    void setUserPointer(VulkanRenderer* renderer);
-
+private:
+    void initWindow(uint32_t width, uint32_t height, const std::string& title);
+    void cleanup();
 private:
     GLFWwindow* window = nullptr;
 
-    void initWindow(uint32_t width, uint32_t height, const std::string& title);
-    void cleanup();
+    struct WindowData
+    {
+        std::string Title;
+        unsigned int Width, Height;
+        EventCallbackFn EventCallback;
+    };
+
+    WindowData m_Data;
 };

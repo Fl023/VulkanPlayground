@@ -381,7 +381,9 @@ bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& r
 				std::string name = matNode["Name"].as<std::string>();
 				AssetHandle albedoHandle = matNode["AlbedoTexture"].as<AssetHandle>();
 
-				m_AssetManager->CreateMaterialWithHandle(handle, name, albedoHandle);
+				MaterialRenderState state{};
+				vk::Format targetFormat = renderer.GetSwapchainFormat();
+				m_AssetManager->CreateMaterialWithHandle(handle, renderer, name, state, targetFormat, albedoHandle);
 			}
 		}
 	}

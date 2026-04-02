@@ -1,6 +1,7 @@
 #pragma once
 
 #include "KeyCodes.hpp"
+#include "MouseCodes.hpp"
 
 struct GLFWwindow; 
 
@@ -14,7 +15,7 @@ public:
     static bool IsKeyPressed(KeyCode key);
 
     // --- Mouse ---
-    static bool IsMouseButtonPressed(int button);
+    static bool IsMouseButtonPressed(MouseCode button);
     static glm::vec2 GetMousePosition();
     static float GetMouseX();
     static float GetMouseY();

@@ -1,11 +1,12 @@
 #include "VulkanShader.hpp"
+#include "spirv_reflect.h"
 
 // ==========================================
 // BASE CLASS IMPLEMENTATION
 // ==========================================
 
-VulkanShader::VulkanShader(const VulkanDevice& device, const std::string& filepath)
-    : m_device(device) 
+VulkanShader::VulkanShader(const VulkanDevice& device, const std::string& filepath, const PipelineSignature* borrowedSignature)
+    : m_device(device)
 {
     auto shaderCode = readFile(filepath);
     
@@ -15,6 +16,19 @@ VulkanShader::VulkanShader(const VulkanDevice& device, const std::string& filepa
     };
     
     m_shaderModule = vk::raii::ShaderModule(m_device.getDevice(), createInfo);
+
+    if (borrowedSignature != nullptr) {
+        // The user provided a signature (e.g., the Global Opaque Signature)
+        m_ActiveSignature = borrowedSignature;
+    }
+    else {
+        // The user provided NOTHING. We must generate and own our signature!
+        m_OwnedSignature = std::make_unique<PipelineSignature>();
+        reflect(shaderCode); // reflect() will now populate m_OwnedSignature!
+
+        // Point the active signature to our newly built one
+        m_ActiveSignature = m_OwnedSignature.get();
+    }
 }
 
 std::vector<char> VulkanShader::readFile(const std::string& filename) const 
@@ -34,70 +48,102 @@ std::vector<char> VulkanShader::readFile(const std::string& filename) const
     return buffer;
 }
 
-// ==========================================
-// MAIN GRAPHICS SHADER IMPLEMENTATION
-// ==========================================
-
-MainGraphicsShader::MainGraphicsShader(const VulkanDevice& device, const std::string& filepath)
-    : VulkanShader(device, filepath)
+void VulkanShader::reflect(const std::vector<char>& shaderCode)
 {
-    // We call this in the derived constructor so the layouts are ready immediately
-    createDescriptorSetLayouts(); 
-}
+    SpvReflectShaderModule reflectModule;
+    SpvReflectResult result = spvReflectCreateShaderModule(shaderCode.size(), shaderCode.data(), &reflectModule);
+    if (result != SPV_REFLECT_RESULT_SUCCESS) {
+        throw std::runtime_error("Failed to reflect shader!");
+    }
 
-void MainGraphicsShader::createDescriptorSetLayouts() 
-{
-    // 1. Layout for Set 0 (Camera UBO) - Moved from your old pipeline 
-    vk::DescriptorSetLayoutBinding globalBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
-    vk::DescriptorSetLayoutCreateInfo globalLayoutInfo{ .bindingCount = 1, .pBindings = &globalBinding };
-    m_layouts.push_back(vk::raii::DescriptorSetLayout(m_device.getDevice(), globalLayoutInfo));
+    // --- EXTRACT DESCRIPTOR SETS ---
+    uint32_t count = 0;
+    spvReflectEnumerateDescriptorSets(&reflectModule, &count, NULL);
+    std::vector<SpvReflectDescriptorSet*> sets(count);
+    spvReflectEnumerateDescriptorSets(&reflectModule, &count, sets.data());
 
-    // 2. Layout for Set 1 (Material Bindless Array) - Moved from your old pipeline 
-    constexpr uint32_t MAX_TEXTURES = 1000;
-    vk::DescriptorSetLayoutBinding materialBinding(0, vk::DescriptorType::eCombinedImageSampler, MAX_TEXTURES, vk::ShaderStageFlagBits::eFragment, nullptr);
+    for (uint32_t i = 0; i < sets.size(); i++) {
+        const SpvReflectDescriptorSet& reflectSet = *(sets[i]);
 
-    vk::DescriptorBindingFlags bindlessFlags =
-        vk::DescriptorBindingFlagBits::ePartiallyBound |
-        vk::DescriptorBindingFlagBits::eUpdateAfterBind |
-        vk::DescriptorBindingFlagBits::eVariableDescriptorCount;
+        std::vector<vk::DescriptorSetLayoutBinding> bindings;
+        std::vector<vk::DescriptorBindingFlags> bindingFlags; // We need a parallel array for the flags!
+        bool isBindlessSet = false;
 
-    vk::DescriptorSetLayoutBindingFlagsCreateInfo extendedInfo{
-        .bindingCount = 1,
-        .pBindingFlags = &bindlessFlags
-    };
+        for (uint32_t j = 0; j < reflectSet.binding_count; j++) {
+            const SpvReflectDescriptorBinding& reflectBinding = *(reflectSet.bindings[j]);
 
-    vk::DescriptorSetLayoutCreateInfo materialLayoutInfo{
-        .pNext = &extendedInfo, 
-        .flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool, 
-        .bindingCount = 1,
-        .pBindings = &materialBinding
-    };    
-    
-    m_layouts.push_back(vk::raii::DescriptorSetLayout(m_device.getDevice(), materialLayoutInfo));
-}
+            // Map the SPIR-V type to the Vulkan type
+            vk::DescriptorType descType = static_cast<vk::DescriptorType>(reflectBinding.descriptor_type);
 
+            vk::DescriptorSetLayoutBinding binding{
+                .binding = reflectBinding.binding,
+                .descriptorType = descType,
+                .descriptorCount = reflectBinding.count, // Handles arrays!
+                .stageFlags = vk::ShaderStageFlagBits::eAllGraphics
+            };
+            bindings.push_back(binding);
 
-// ==========================================
-// SKYBOX SHADER IMPLEMENTATION
-// ==========================================
+            // --- BINDLESS DETECTION OVERRIDE ---
+            // If the shader defines a massive array (e.g., textures[1000]) or an unbounded array (count == 0)
+            if (reflectBinding.count >= 1000 || reflectBinding.count == 0) {
+                isBindlessSet = true;
 
-SkyboxShader::SkyboxShader(const VulkanDevice& device, const std::string& filepath)
-    : VulkanShader(device, filepath)
-{
-    // Explicit initialization, as requested!
-    createDescriptorSetLayouts();
-}
+                // Apply your exact bindless flags!
+                bindingFlags.push_back(
+                    vk::DescriptorBindingFlagBits::ePartiallyBound |
+                    vk::DescriptorBindingFlagBits::eUpdateAfterBind |
+                    vk::DescriptorBindingFlagBits::eVariableDescriptorCount
+                );
 
-void SkyboxShader::createDescriptorSetLayouts()
-{
-    // 1. Layout for Set 0 (Camera UBO - Identical to Main Shader)
-    vk::DescriptorSetLayoutBinding globalBinding(0, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex, nullptr);
-    vk::DescriptorSetLayoutCreateInfo globalLayoutInfo{ .bindingCount = 1, .pBindings = &globalBinding };
-    m_layouts.push_back(vk::raii::DescriptorSetLayout(m_device.getDevice(), globalLayoutInfo));
+                // If the shader used an unbounded array like `textures[]`, explicitly set it to your engine's MAX_TEXTURES
+                if (reflectBinding.count == 0) {
+                    bindings.back().descriptorCount = 1000;
+                }
+            }
+            else {
+                // Normal bindings (like your UBO or Skybox cubemap) get no special flags
+                bindingFlags.push_back(vk::DescriptorBindingFlags{});
+            }
+        }
 
-    // 2. Layout for Set 1 (Cubemap Texture)
-    // Notice this is NOT a bindless array. It's just a single texture!
-    vk::DescriptorSetLayoutBinding cubemapBinding(0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment, nullptr);
-    vk::DescriptorSetLayoutCreateInfo cubemapLayoutInfo{ .bindingCount = 1, .pBindings = &cubemapBinding };
-    m_layouts.push_back(vk::raii::DescriptorSetLayout(m_device.getDevice(), cubemapLayoutInfo));
+        // Create the Vulkan Layout automatically!
+        vk::DescriptorSetLayoutCreateInfo layoutInfo{
+            .bindingCount = static_cast<uint32_t>(bindings.size()),
+            .pBindings = bindings.data()
+        };
+
+        // If we detected a bindless array in this set, we must attach the pNext chain!
+        vk::DescriptorSetLayoutBindingFlagsCreateInfo extendedInfo{};
+        if (isBindlessSet) {
+            extendedInfo.bindingCount = static_cast<uint32_t>(bindingFlags.size());
+            extendedInfo.pBindingFlags = bindingFlags.data();
+
+            layoutInfo.pNext = &extendedInfo;
+            // Add the pool flag required for bindless sets
+            layoutInfo.flags = vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool;
+        }
+
+        m_OwnedSignature->AddSetLayout(reflectSet.set, { m_device.getDevice(), layoutInfo });
+    }
+
+    // --- EXTRACT PUSH CONSTANTS ---
+    uint32_t pushConstantCount = 0;
+    spvReflectEnumeratePushConstantBlocks(&reflectModule, &pushConstantCount, NULL);
+    std::vector<SpvReflectBlockVariable*> pushConstants(pushConstantCount);
+    spvReflectEnumeratePushConstantBlocks(&reflectModule, &pushConstantCount, pushConstants.data());
+
+    for (uint32_t i = 0; i < pushConstantCount; i++) {
+        const SpvReflectBlockVariable& reflectPushConstant = *(pushConstants[i]);
+
+        m_OwnedSignature->AddPushConstantRange(
+            reflectPushConstant.size,
+            vk::ShaderStageFlagBits::eAllGraphics,
+            reflectPushConstant.offset
+		);
+    }
+
+    m_OwnedSignature->Build(m_device.getDevice());
+
+    // Cleanup
+    spvReflectDestroyShaderModule(&reflectModule);
 }

@@ -1,51 +1,28 @@
 #pragma once
 
 #include "VulkanDevice.hpp"
+#include "VulkanDescriptorAllocator.hpp"
 #include <string>
 #include <vector>
 
 class VulkanShader {
 public:
-    VulkanShader(const VulkanDevice& device, const std::string& filepath);
+    VulkanShader(const VulkanDevice& device, const std::string& filepath, const PipelineSignature* borrowedSignature = nullptr);
     virtual ~VulkanShader() = default;
 
     const vk::raii::ShaderModule& getModule() const { return m_shaderModule; }
     
-    const std::vector<vk::raii::DescriptorSetLayout>& getLayouts() const { return m_layouts; }
+    const PipelineSignature* getSignature() const { return m_ActiveSignature; }
 
 protected:
     std::vector<char> readFile(const std::string& filename) const;
-
-    // Pure virtual function: Forces every specific shader to define its own bindings
-    virtual void createDescriptorSetLayouts() = 0;
+    void reflect(const std::vector<char>& shaderCode);
 
 protected:
     const VulkanDevice& m_device;
     vk::raii::ShaderModule m_shaderModule = nullptr;
     
-    std::vector<vk::raii::DescriptorSetLayout> m_layouts;
+    std::unique_ptr<PipelineSignature> m_OwnedSignature;
 
-
-};
-
-// ==========================================
-// CONCRETE IMPLEMENTATION: Main Shader
-// ==========================================
-class MainGraphicsShader : public VulkanShader {
-public:
-    MainGraphicsShader(const VulkanDevice& device, const std::string& filepath);
-
-protected:
-    void createDescriptorSetLayouts() override;
-};
-
-// ==========================================
-// Skybox Shader
-// ==========================================
-class SkyboxShader : public VulkanShader {
-public:
-    SkyboxShader(const VulkanDevice& device, const std::string& filepath);
-
-protected:
-    void createDescriptorSetLayouts() override;
+    const PipelineSignature* m_ActiveSignature = nullptr;
 };

@@ -2,18 +2,17 @@
 
 #include "VulkanDevice.hpp"
 #include "VulkanSwapChain.hpp"
-#include "VulkanShader.hpp"
-#include "VulkanPipeline.hpp"
 #include "VulkanFrame.hpp"
-#include "VulkanVertex.hpp"
 #include "VulkanBuffer.hpp"
 #include "VulkanImage.hpp"
 #include "VulkanRenderTarget.hpp"
-#include "scene/Mesh.hpp"
-#include "scene/Scene.hpp"
-#include "scene/Components.hpp"
-#include "scene/AssetManager.hpp"
-#include "ImGuiLayer.hpp"
+#include "VulkanDescriptorAllocator.hpp"
+#include "scene/Texture.hpp"
+#include "SceneRenderer.hpp"
+
+#include "RenderGraph.hpp"
+#include "scene/RenderView.hpp"
+#include "RGCommandList.hpp"
 
 class VulkanRenderer
 {
@@ -21,62 +20,91 @@ public:
     VulkanRenderer(VulkanWindow& window);
     ~VulkanRenderer();
 
-    const VulkanContext& getContext() const;
-	const VulkanDevice& getDevice() const { return device; }
-    const VulkanWindow& getWindow() const;
+    // --- CORE GETTERS ---
+    const VulkanContext& getContext() const { return context; }
+    const VulkanDevice& getDevice() const { return m_Device; }
+    const VulkanWindow& getWindow() const { return window; }
+	const VulkanSwapChain& getSwapChain() const { return swapChain; }
 
-    void drawFrame(Scene& scene, AssetManager& assetManager);
-    void beginUI();
+    // --- AAA LIFECYCLE ---
+    bool BeginFrame(const RenderView& view);
+    void ExecuteRenderGraph(RenderGraph& renderGraph, const RenderView& view);
+    void EndFrame();
+    void Present();
 
+    void recordImGuiCommands(vk::CommandBuffer commandBuffer);
+
+    // --- BINDLESS RESOURCE MANAGEMENT ---
     void AddTextureToBindlessArray(Texture* texture);
-    void FreeBindlessIndex(uint32_t index);
-
+    void FreeBindlessIndex(uint32_t index, bool isCubemap = true);
     void SubmitToDeletionQueue(std::function<void()>&& function);
 
+    // --- VIEWPORT / GRAPH UTILS ---
+    void InitViewport();
+    void DestroyViewport() { m_ViewportTarget.reset(); }
     vk::DescriptorSet GetViewportTextureID() const { return m_ViewportTarget->GetImGuiTextureID(); }
     void ResizeViewport(uint32_t width, uint32_t height) { m_ViewportTarget->Resize(width, height); }
 
-    // Public variable accessed by the Window callback
+    // Viewport Color (MSAA)
+    vk::Image GetViewportColorImage() { return *m_ViewportTarget->GetColorImage().getImage(); }
+    vk::ImageView GetViewportColorImageView() { return *m_ViewportTarget->GetColorImage().getImageView(); }
+
+    // Viewport Resolve (1-Sample)
+    vk::Image GetViewportResolveImage() { return *m_ViewportTarget->GetResolveImage().getImage(); }
+    vk::ImageView GetViewportResolveImageView() { return *m_ViewportTarget->GetResolveImage().getImageView(); }
+
+    // Viewport Depth
+    vk::Image GetViewportDepthImage() { return *m_ViewportTarget->GetDepthImage().getImage(); }
+    vk::ImageView GetViewportDepthImageView() { return *m_ViewportTarget->GetDepthImage().getImageView(); }
+
+    // Swapchain
+    vk::Format GetSwapchainFormat() const { return swapChain.getSurfaceFormat().format; }
+    // Assuming swapChain.getImages() returns std::vector<vk::Image>
+    vk::Image GetCurrentSwapchainImage() { return swapChain.getImages()[m_CurrentImageIndex]; }
+    vk::ImageView GetCurrentSwapchainImageView() { return swapChain.getImageViews()[m_CurrentImageIndex]; }
+
+	PipelineSignature* GetGeneralPipelineSignature() { return &m_GeneralPipelineSignature; }
+
     bool framebufferResized = false;
 
 private:
-	void createPipelines();
+	// we create a basic descriptor set layout that we will use for most of the shaders.
+	// This way we can just bind the same descriptor set for all draw calls even across different shaders.
+	// Only for a few special cases like compute shaders, we will create separate layouts and bind different sets.
+	// But these layouts will be created by the spirV reflection system, not manually like this one.
+    void createGeneralDescriptorSetLayoutsAndSets();
 
-    void createSyncObjects();
-
-    void createDepthResources();
-
-    void createColorResources();
-
-    void recreateSwapchainResources();
-
-    void updateUniformBuffer(uint32_t currentImage, Scene& scene);
-
-    void recordCommandBuffer(uint32_t imageIndex, Scene& scene, AssetManager& assetManager);
-
-    void recordSceneCommands(vk::raii::CommandBuffer &commandBuffer, Scene& scene, AssetManager& assetManager);
-    void recordUICommands(vk::raii::CommandBuffer &commandBuffer, uint32_t imageIndex);
-
-    void createBindlessDescriptorSet();
+    // each frame in flight needs an own global uniform buffer. The global uniform buffers get updated every frame,
+    // so we can't update the descriptor set while a shader uses it.
+	// since the bindless descriptor sets don't get completely overwritten every frame like the global sets do, 
+    // we can create them once and then just update the relevant bindings when we add new textures.
+	// To ensure that we get no dataraces when updating the bindless descriptor set while a shader is using it, 
+	// we queue delete operations for the bindless descriptor set updates and execute them at the beginning of the next time this frame gets rendered.
 
     void createDefaultTexture();
+    void createColorResources();
+    void createDepthResources();
+    void createSyncObjects();
+    void recreateSwapchainResources();
 
 private:
-    VulkanWindow&  window;
+    VulkanWindow& window;
     VulkanContext context;
-    VulkanDevice  device;
+    VulkanDevice  m_Device;
     VulkanSwapChain swapChain;
 
-    struct PushConstants {
-        glm::mat4 modelMatrix;
-        uint32_t textureIndex;
-    };
+    // The Fast-Path Allocator (For static UBOs, Post-Processing, Compute)
+    DescriptorAllocator m_StandardAllocator;
 
-    std::unique_ptr<MainGraphicsShader> m_mainShader;
-    std::unique_ptr<VulkanPipeline> m_graphicsPipeline;
-	
-    std::unique_ptr<SkyboxShader> m_skyboxShader;
-    std::unique_ptr<VulkanPipeline> m_skyboxPipeline;
+    // The Bindless Allocator (Only for the giant dynamic arrays)
+    DescriptorAllocator m_BindlessAllocator;
+
+	// The general pipeline signature that most shaders will use. It contains the global set and the bindless set.
+	PipelineSignature m_GeneralPipelineSignature;
+
+	// The global camera set is contained in the frame data,
+	// and the bindless set is stored here in the renderer since it is shared across all frames and gets updated less frequently.
+	std::unique_ptr<DescriptorSetInstance> m_BindlessDescriptorSet;
 
     std::optional<VulkanImage> depthImage;
     std::optional<VulkanImage> colorImage;
@@ -84,17 +112,18 @@ private:
     static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     std::vector<VulkanFrame> frames;
     uint32_t frameIndex = 0;
+    uint32_t m_CurrentImageIndex = 0;
 
     std::vector<vk::raii::Semaphore> renderFinishedSemaphores;
-
-    vk::raii::DescriptorPool bindlessPool = nullptr;
-    vk::raii::DescriptorSet bindlessDescriptorSet = nullptr;
 
     static constexpr uint32_t MAX_BINDLESS_TEXTURES = 1000;
     std::vector<uint32_t> m_FreeTextureIndices;
     uint32_t currentTextureIndex = 0;
+
+    uint32_t currentCubemapIndex = 0;
+    std::vector<uint32_t> m_FreeCubemapIndices;
     std::unique_ptr<Texture> m_DefaultTexture;
-    std::unique_ptr<ImGuiLayer> imGuiLayer;
+
     std::optional<RenderTarget> m_ViewportTarget;
 
     std::vector<std::function<void()>> m_DeletionQueues[MAX_FRAMES_IN_FLIGHT];

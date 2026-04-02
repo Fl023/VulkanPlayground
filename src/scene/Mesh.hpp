@@ -6,7 +6,7 @@
 
 class Mesh {
 public:
-    Mesh(const VulkanDevice& device, const std::string& name, const std::vector<Vertex>& vertices, const std::vector<uint16_t>& indices);
+    Mesh(const VulkanDevice& device, const std::string& name, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
 
     const std::string& GetName() const { return m_Name; }
     const vk::raii::Buffer& getVertexBuffer() const { return m_VertexBuffer->getBuffer(); }

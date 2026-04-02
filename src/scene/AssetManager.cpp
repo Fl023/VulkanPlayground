@@ -2,9 +2,8 @@
 #include "Texture.hpp"
 #include "Material.hpp"
 #include "Mesh.hpp"
-#include "Model.hpp"
 #include "renderer/VulkanRenderer.hpp"
-
+#include "renderer/VulkanPipeline.hpp"
 
 AssetManager::~AssetManager() { Clear(); }
 
@@ -108,8 +107,7 @@ AssetHandle AssetManager::LoadCubemap(VulkanRenderer& renderer, const std::strin
     // Use the Cubemap constructor
     auto texture = std::make_unique<Texture>(renderer.getDevice(), facePaths);
 
-    // If your Vulkan backend requires Cubemaps to be in the bindless array, 
-    // you would call renderer.AddTextureToBindlessArray(texture.get()) here!
+    renderer.AddTextureToBindlessArray(texture.get());
 
     m_Textures[handle] = std::move(texture);
     m_TextureRegistry[safeName] = handle;
@@ -140,13 +138,14 @@ AssetHandle AssetManager::LoadCubemapWithHandle(AssetHandle handle, VulkanRender
     // 2. MEMORY ALLOCATION
     if (m_Textures.find(handle) == m_Textures.end()) {
         auto texture = std::make_unique<Texture>(renderer.getDevice(), facePaths);
+        renderer.AddTextureToBindlessArray(texture.get());
         m_Textures[handle] = std::move(texture);
     }
+
     return handle;
 }
 
-
-AssetHandle AssetManager::CreateMaterial(const std::string& name, AssetHandle albedoHandle)
+AssetHandle AssetManager::CreateMaterial(VulkanRenderer& renderer, const std::string& name, const MaterialRenderState& state, vk::Format targetFormat, AssetHandle albedoHandle)
 {
     // NAME COLLISION: Auto-rename loop
     std::string safeName = name;
@@ -156,13 +155,17 @@ AssetHandle AssetManager::CreateMaterial(const std::string& name, AssetHandle al
         suffix++;
     }
 
+    // 1. Resolve the Pipeline!
+    VulkanPipeline* pipeline = GetOrCreatePipeline(renderer, state, targetFormat);
+
+    // 2. Create the Material with the resolved pipeline
     AssetHandle handle;
-    m_Materials[handle] = std::make_unique<Material>(safeName, albedoHandle);
+    m_Materials[handle] = std::make_unique<Material>(safeName, state, pipeline, albedoHandle);
     m_MaterialRegistry[safeName] = handle;
     return handle;
 }
 
-AssetHandle AssetManager::CreateMaterialWithHandle(AssetHandle handle, const std::string& name, AssetHandle albedoHandle)
+AssetHandle AssetManager::CreateMaterialWithHandle(AssetHandle handle, VulkanRenderer& renderer, const std::string& name, const MaterialRenderState& state, vk::Format targetFormat, AssetHandle albedoHandle)
 {
     // 1. ALIAS REGISTRATION
     std::string safeName = name;
@@ -185,9 +188,11 @@ AssetHandle AssetManager::CreateMaterialWithHandle(AssetHandle handle, const std
         m_MaterialRegistry[safeName] = handle;
     }
 
+    VulkanPipeline* pipeline = GetOrCreatePipeline(renderer, state, targetFormat);
+
     // 2. MEMORY ALLOCATION
     if (m_Materials.find(handle) == m_Materials.end()) {
-        m_Materials[handle] = std::make_unique<Material>(safeName, albedoHandle);
+        m_Materials[handle] = std::make_unique<Material>(safeName, state, pipeline, albedoHandle);
     }
 
     return handle;
@@ -432,7 +437,7 @@ void AssetManager::RemoveTexture(VulkanRenderer& renderer, const std::string& na
             renderer.SubmitToDeletionQueue([tex = texToKill, bindlessIndex, &renderer]() {
 
                 // Free the bindless slot for future textures
-                renderer.FreeBindlessIndex(bindlessIndex);
+                renderer.FreeBindlessIndex(bindlessIndex, tex->IsCubemap());
 
                 // The lambda dies, the shared_ptr drops to 0, and the texture is destroyed!
                 });
@@ -475,4 +480,69 @@ void AssetManager::Clear()
     m_Materials.clear();
     m_Meshes.clear();
 	m_Models.clear();
+}
+
+VulkanPipeline* AssetManager::GetOrCreatePipeline(VulkanRenderer& renderer, const MaterialRenderState& state, vk::Format targetFormat)
+{
+    // 1. Check if we already compiled this exact setup
+    std::string hash = state.GenerateHash(static_cast<uint32_t>(targetFormat));
+    if (m_PipelineCache.find(hash) != m_PipelineCache.end()) {
+        return m_PipelineCache[hash].get();
+    }
+
+    const VulkanDevice& device = renderer.getDevice();
+
+    // 2. Start with sensible defaults
+    PipelineConfigInfo config{};
+    VulkanPipeline::defaultPipelineConfigInfo(config, device.getMsaaSamples());
+
+    // 3. APPLY OVERRIDES FROM THE FRONTEND STATE
+
+    // Culling
+    if (state.Culling == CullMode::None) {
+        config.rasterizationInfo.cullMode = vk::CullModeFlagBits::eNone;
+    }
+    else if (state.Culling == CullMode::Front) {
+        config.rasterizationInfo.cullMode = vk::CullModeFlagBits::eFront;
+    }
+
+    // Wireframe
+    if (state.IsWireframe) {
+        config.rasterizationInfo.polygonMode = vk::PolygonMode::eLine;
+    }
+
+    // Blending (Simple Alpha Blend Example)
+    if (state.Blending == BlendMode::AlphaBlend) {
+        config.colorBlendAttachment.blendEnable = vk::True;
+        config.colorBlendAttachment.srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
+        config.colorBlendAttachment.dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+        config.colorBlendAttachment.colorBlendOp = vk::BlendOp::eAdd;
+        config.colorBlendAttachment.srcAlphaBlendFactor = vk::BlendFactor::eOne;
+        config.colorBlendAttachment.dstAlphaBlendFactor = vk::BlendFactor::eZero;
+        config.colorBlendAttachment.alphaBlendOp = vk::BlendOp::eAdd;
+    }
+
+    // Depth
+    if (state.Depth == DepthState::ReadOnly) {
+        config.depthStencilInfo.depthWriteEnable = vk::False;
+    }
+    else if (state.Depth == DepthState::Off) {
+        config.depthStencilInfo.depthTestEnable = vk::False;
+        config.depthStencilInfo.depthWriteEnable = vk::False;
+    }
+
+    // 4. Set the dynamic rendering format
+    config.colorAttachmentFormats = { targetFormat };
+    config.depthAttachmentFormat = vk::Format::eD32Sfloat; // Or dynamically pass this in too!
+
+    // 5. Load the unified shader module using your new Reflection system!
+    VulkanShader shader(device, state.ShaderPath, renderer.GetGeneralPipelineSignature());
+
+    // 6. Compile, store, and return
+    auto newPipeline = std::make_unique<VulkanPipeline>(device, shader, config);
+    VulkanPipeline* ptr = newPipeline.get();
+
+    m_PipelineCache[hash] = std::move(newPipeline);
+
+    return ptr;
 }

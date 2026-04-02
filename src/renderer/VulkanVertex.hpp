@@ -80,7 +80,7 @@ const std::vector<Vertex> cubeVertices = {
 };
 
 
-const std::vector<uint16_t> cubeIndices = {
+const std::vector<uint32_t> cubeIndices = {
     // Front face
     0, 1, 2,   0, 2, 3,
 
@@ -119,7 +119,7 @@ const std::vector<Vertex> squareVertices = {
     {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}}
 };
 
-const std::vector<uint16_t> squareIndices = {
+const std::vector<uint32_t> squareIndices = {
     0, 1, 2,  // First triangle (Counter-Clockwise)
     0, 2, 3   // Second triangle (Counter-Clockwise)
 };

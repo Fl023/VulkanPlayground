@@ -14,8 +14,6 @@ struct PipelineConfigInfo {
     std::vector<vk::DynamicState> dynamicStateEnables;
     vk::PipelineDynamicStateCreateInfo dynamicStateInfo;
 
-    std::vector<vk::PushConstantRange> pushConstantRanges;
-
     std::vector<vk::Format> colorAttachmentFormats;
     vk::Format depthAttachmentFormat = vk::Format::eUndefined;
 
@@ -33,13 +31,13 @@ public:
     VulkanPipeline& operator=(const VulkanPipeline&) = delete;
 
     const vk::raii::Pipeline& getPipeline() const { return m_pipeline; }
-    const vk::raii::PipelineLayout& getPipelineLayout() const { return m_pipelineLayout; }
+    const vk::raii::PipelineLayout& getPipelineLayout() const { return m_pipelineSignature->GetLayout(); }
 
     // Helper to fill the struct with your standard 3D mesh settings
     static void defaultPipelineConfigInfo(PipelineConfigInfo& configInfo, vk::SampleCountFlagBits msaaSamples);
 
 private:
     const VulkanDevice& m_device;
-    vk::raii::PipelineLayout m_pipelineLayout = nullptr;
+    const PipelineSignature* m_pipelineSignature = nullptr;
     vk::raii::Pipeline m_pipeline = nullptr;
 };

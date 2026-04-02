@@ -2,7 +2,11 @@
 
 
 ImGuiLayer::ImGuiLayer(const VulkanDevice& device, const VulkanSwapChain& swapChain)
-    : m_Device(device)
+	: Layer("ImGuiLayer"), m_Device(device), m_SwapChain(swapChain)
+{
+}
+
+void ImGuiLayer::OnAttach()
 {
     // 1. ImGui Kontext erstellen
     IMGUI_CHECKVERSION();
@@ -14,48 +18,79 @@ ImGuiLayer::ImGuiLayer(const VulkanDevice& device, const VulkanSwapChain& swapCh
 
     ImGui::StyleColorsDark();
 
+    //std::array<vk::DescriptorPoolSize, 11> pool_sizes = {
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eSampler, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eCombinedImageSampler, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eSampledImage, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageImage, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eUniformTexelBuffer, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageTexelBuffer, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eUniformBuffer, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageBuffer, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eUniformBufferDynamic, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageBufferDynamic, 1000 },
+    //    vk::DescriptorPoolSize{ vk::DescriptorType::eInputAttachment, 1000 }
+    //};
+
+    //vk::DescriptorPoolCreateInfo pool_info{
+    //    .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+    //    .maxSets = 1000 * static_cast<uint32_t>(pool_sizes.size()),
+    //    .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
+    //    .pPoolSizes = pool_sizes.data()
+    //};
+
+    //m_ImGuiPool = vk::raii::DescriptorPool(m_Device.getDevice(), pool_info);
+
     // 2. GLFW Backend initialisieren
     // Nutzt jetzt deinen neuen Getter!
-    ImGui_ImplGlfw_InitForVulkan(device.getWindow().getNativeWindow(), true);
+    ImGui_ImplGlfw_InitForVulkan(m_Device.getWindow().getNativeWindow(), true);
 
     // 3. Vulkan Backend initialisieren
     ImGui_ImplVulkan_InitInfo init_info = {};
-    
+
     // Nutzt jetzt deinen neuen Getter für den Context!
-    init_info.Instance = *device.getContext().getInstance(); 
-    init_info.PhysicalDevice = *device.getPhysicalDevice();
-    init_info.Device = *device.getDevice();
-    init_info.QueueFamily = device.getQueueIndex();
-    init_info.Queue = *device.getQueue();
+    init_info.Instance = *m_Device.getContext().getInstance();
+    init_info.PhysicalDevice = *m_Device.getPhysicalDevice();
+    init_info.Device = *m_Device.getDevice();
+    init_info.QueueFamily = m_Device.getQueueIndex();
+    init_info.Queue = *m_Device.getQueue();
 
     // ImGui erstellt seinen eigenen Pool
-    init_info.DescriptorPoolSize = 1000; 
-    
+    //init_info.DescriptorPool = static_cast<VkDescriptorPool>(*m_ImGuiPool);
+    init_info.DescriptorPoolSize = 1000;
+
     // Für Dynamic Rendering braucht ImGui die genauen Formate
     init_info.UseDynamicRendering = true;
-    
-    m_ColorFormat = static_cast<VkFormat>(swapChain.getSurfaceFormat().format);
+
+    m_ColorFormat = static_cast<VkFormat>(m_SwapChain.getSurfaceFormat().format);
     init_info.PipelineRenderingCreateInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
     init_info.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
     init_info.PipelineRenderingCreateInfo.pColorAttachmentFormats = &m_ColorFormat;
-    
+
     // Dynamische Frame-Limits anstatt harter Zahlen
-    uint32_t imageCount = static_cast<uint32_t>(swapChain.getImages().size());
-    init_info.MinImageCount = imageCount; 
+    uint32_t imageCount = static_cast<uint32_t>(m_SwapChain.getImages().size());
+    init_info.MinImageCount = imageCount;
     init_info.ImageCount = imageCount;
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT; // static_cast<VkSampleCountFlagBits>(device.getMsaaSamples());
 
     ImGui_ImplVulkan_Init(&init_info);
 }
 
-ImGuiLayer::~ImGuiLayer()
+void ImGuiLayer::OnDetach()
 {
-    // Warten, bis die GPU nichts mehr macht, bevor Ressourcen freigegeben werden
-    m_Device.getDevice().waitIdle();
-
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+}
+
+void ImGuiLayer::OnEvent(Event& e)
+{
+    if (m_BlockEvents)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        e.Handled |= e.IsInCategory(EventCategoryMouse) & io.WantCaptureMouse;
+        e.Handled |= e.IsInCategory(EventCategoryKeyboard) & io.WantCaptureKeyboard;
+    }
 }
 
 void ImGuiLayer::beginFrame()
@@ -66,14 +101,7 @@ void ImGuiLayer::beginFrame()
 	ImGuizmo::BeginFrame();
 }
 
-void ImGuiLayer::recordImGuiCommands(const vk::raii::CommandBuffer& commandBuffer)
+void ImGuiLayer::endFrame()
 {
-    // Generiert die Geometrie für die UI
     ImGui::Render();
-    
-    ImDrawData* draw_data = ImGui::GetDrawData();
-    if (draw_data) {
-        // vk::raii::CommandBuffer zu VkCommandBuffer dereferenzieren und aufzeichnen
-        ImGui_ImplVulkan_RenderDrawData(draw_data, *commandBuffer);
-    }
 }

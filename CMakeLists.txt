@@ -31,7 +31,7 @@ function(add_slang_shader_target TARGET)
         
         add_custom_command(
             OUTPUT ${SPV_OUT}
-            COMMAND ${SLANGC_EXECUTABLE} ${SLANG_SRC} -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o ${SPV_OUT}
+            COMMAND ${SLANGC_EXECUTABLE} ${SLANG_SRC} -target spirv -profile spirv_1_5 -emit-spirv-directly -fvk-use-entrypoint-name -entry vertMain -entry fragMain -o ${SPV_OUT}
             DEPENDS ${SLANG_SRC} ${SHADERS_DIR}
             COMMENT "Compiling Slang Shader: ${FILE_NAME}.slang -> ${FILE_NAME}.spv"
             VERBATIM
@@ -52,6 +52,7 @@ find_package(Stb REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(imguizmo CONFIG REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
+find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 
 file(GLOB_RECURSE ALL_SOURCES 
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
@@ -81,6 +82,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     imgui::imgui
     imguizmo::imguizmo
     yaml-cpp::yaml-cpp
+    unofficial::spirv-reflect
 )
 
 # Pass all found .slang files to our compilation function

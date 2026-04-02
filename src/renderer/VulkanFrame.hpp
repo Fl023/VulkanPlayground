@@ -3,7 +3,6 @@
 #include "VulkanDevice.hpp"
 #include "VulkanBuffer.hpp"
 #include "VulkanDescriptorAllocator.hpp"
-#include "scene/AssetHandle.hpp"
 
 struct VulkanFrame {
 	// Command Resources
@@ -18,16 +17,12 @@ struct VulkanFrame {
 	std::optional<VulkanBuffer> uniformBuffer;
 
 	// Descriptor Resources
-    DescriptorAllocator frameAllocator;
-	vk::raii::DescriptorSet cameraSet = nullptr;
-    vk::raii::DescriptorSet skyboxSet = nullptr;
-    AssetHandle activeSkyboxHandle = INVALID_ASSET_HANDLE;
+    std::unique_ptr<DescriptorSetInstance> globalSet;
 
-	VulkanFrame(const VulkanDevice& device, const vk::raii::DescriptorSetLayout& cameraLayout, const vk::raii::DescriptorSetLayout& skyboxLayout, vk::DeviceSize uboSize)
-        : frameAllocator(device.getDevice(), 2, {
-            vk::DescriptorPoolSize(vk::DescriptorType::eUniformBuffer, 1),
-            vk::DescriptorPoolSize(vk::DescriptorType::eCombinedImageSampler, 1)
-            })
+	VulkanFrame(const VulkanDevice& device, 
+        const vk::raii::DescriptorSetLayout& globalLayout, 
+        vk::DeviceSize uboSize,
+        DescriptorAllocator* globalAllocator)
 	{
         // 1. Command Pool & Buffer erstellen
         vk::CommandPoolCreateInfo poolInfo{
@@ -55,25 +50,13 @@ struct VulkanFrame {
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
         );
 
-        cameraSet = frameAllocator.allocate(cameraLayout);
-        skyboxSet = frameAllocator.allocate(skyboxLayout);
+        globalSet = std::make_unique<DescriptorSetInstance>(device.getDevice(), globalLayout, globalAllocator);
 
-        // 6. Das Set mit dem Buffer verknüpfen (Write Descriptor Set)
-        vk::DescriptorBufferInfo bufferInfo{
-            .buffer = *uniformBuffer->getBuffer(),
-            .offset = 0,
-            .range = uboSize
-        };
-
-        vk::WriteDescriptorSet descriptorWrite{
-            .dstSet = *cameraSet,
-            .dstBinding = 0,
-            .dstArrayElement = 0,
-            .descriptorCount = 1,
-            .descriptorType = vk::DescriptorType::eUniformBuffer,
-            .pBufferInfo = &bufferInfo
-        };
-
-        device.getDevice().updateDescriptorSets(descriptorWrite, nullptr);
+        globalSet->WriteBuffer(
+            0,
+            *uniformBuffer->getBuffer(),
+            uboSize,
+            vk::DescriptorType::eUniformBuffer
+        );
 	}
 };

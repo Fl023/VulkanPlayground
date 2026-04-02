@@ -15,7 +15,7 @@ void VulkanPipeline::defaultPipelineConfigInfo(PipelineConfigInfo& configInfo, v
     
     configInfo.colorBlendInfo = { .logicOpEnable = vk::False, .logicOp = vk::LogicOp::eCopy, .attachmentCount = 1, .pAttachments = &configInfo.colorBlendAttachment };
     
-    configInfo.depthStencilInfo = { .depthTestEnable = vk::True, .depthWriteEnable = vk::True, .depthCompareOp = vk::CompareOp::eLess, .depthBoundsTestEnable = vk::False, .stencilTestEnable = vk::False };
+    configInfo.depthStencilInfo = { .depthTestEnable = vk::True, .depthWriteEnable = vk::True, .depthCompareOp = vk::CompareOp::eLessOrEqual, .depthBoundsTestEnable = vk::False, .stencilTestEnable = vk::False };
     
     configInfo.dynamicStateEnables = { vk::DynamicState::eViewport, vk::DynamicState::eScissor };
     
@@ -29,24 +29,8 @@ void VulkanPipeline::defaultPipelineConfigInfo(PipelineConfigInfo& configInfo, v
 VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanShader& shader, const PipelineConfigInfo& config)
     : m_device(device)
 {
-    // 1. Get the RAII layouts via const ref
-    const auto& raiiLayouts = shader.getLayouts();
     
-    // 2. Extract the raw handles locally into a temporary vector
-    std::vector<vk::DescriptorSetLayout> rawLayouts;
-    rawLayouts.reserve(raiiLayouts.size());
-    for (const auto& layout : raiiLayouts) {
-        rawLayouts.push_back(*layout); // Extracts the raw vk::DescriptorSetLayout
-    }
-
-    // 3. Create Pipeline Layout
-    vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-        .setLayoutCount = static_cast<uint32_t>(rawLayouts.size()),
-        .pSetLayouts = rawLayouts.data(),
-        .pushConstantRangeCount = static_cast<uint32_t>(config.pushConstantRanges.size()),
-        .pPushConstantRanges = config.pushConstantRanges.data()
-    };
-    m_pipelineLayout = vk::raii::PipelineLayout(m_device.getDevice(), pipelineLayoutInfo);
+    m_pipelineSignature = shader.getSignature();
 
     // 4. Setup Shader Stages
     vk::PipelineShaderStageCreateInfo shaderStages[] = {
@@ -75,7 +59,7 @@ VulkanPipeline::VulkanPipeline(const VulkanDevice& device, const VulkanShader& s
         .pInputAssemblyState = &config.inputAssemblyInfo, .pViewportState = &config.viewportInfo,
         .pRasterizationState = &config.rasterizationInfo, .pMultisampleState = &config.multisampleInfo,
         .pDepthStencilState = &config.depthStencilInfo, .pColorBlendState = &config.colorBlendInfo,
-        .pDynamicState = &config.dynamicStateInfo, .layout = *m_pipelineLayout, .renderPass = nullptr 
+        .pDynamicState = &config.dynamicStateInfo, .layout = *getPipelineLayout(), .renderPass = nullptr
     };
 
     vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> chain(pipelineInfo, pipelineRenderingCreateInfo);

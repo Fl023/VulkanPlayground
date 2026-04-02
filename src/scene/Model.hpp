@@ -35,7 +35,7 @@ public:
 private:
     int32_t ProcessNode(const tinygltf::Model& model, int gltf_node_index, int32_t parent_index, const std::vector<AssetHandle>& materialHandles);
     std::vector<AssetHandle> ExtractMaterials(const tinygltf::Model& model, const std::string& filepath);
-    void ExtractPrimitiveGeometry(const tinygltf::Model& model, const tinygltf::Primitive& primitive, std::vector<Vertex>& out_vertices, std::vector<uint16_t>& out_indices);
+    void ExtractPrimitiveGeometry(const tinygltf::Model& model, const tinygltf::Primitive& primitive, std::vector<Vertex>& out_vertices, std::vector<uint32_t>& out_indices);
 
 private:
     std::string m_Name;

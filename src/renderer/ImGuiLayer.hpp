@@ -2,20 +2,29 @@
 
 #include "VulkanDevice.hpp"
 #include "VulkanSwapChain.hpp"
+#include "core/Layer.hpp"
 
-class ImGuiLayer
+class ImGuiLayer : public Layer
 {
 public:
     ImGuiLayer(const VulkanDevice& device, const VulkanSwapChain& swapChain);
-    ~ImGuiLayer();
+    ~ImGuiLayer() = default;
 
-    // Startet den neuen ImGui-Frame (sammelt Input etc.)
+    virtual void OnAttach() override;
+    virtual void OnDetach() override;
+    virtual void OnEvent(Event& e) override;
+
     void beginFrame();
+	void endFrame();
 
-    // Nimmt die fertigen UI-Daten und schreibt sie in den CommandBuffer
-    void recordImGuiCommands(const vk::raii::CommandBuffer& commandBuffer);
+    void BlockEvents(bool block) { m_BlockEvents = block; }
 
 private:
     const VulkanDevice& m_Device;
+	const VulkanSwapChain& m_SwapChain;
     VkFormat m_ColorFormat;
+
+    //vk::raii::DescriptorPool m_ImGuiPool = nullptr;
+
+    bool m_BlockEvents = true;
 };

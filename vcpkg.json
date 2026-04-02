@@ -16,6 +16,7 @@
     },
     "imguizmo",
     "tinygltf",
-    "yaml-cpp"
+    "yaml-cpp",
+    "spirv-reflect"
   ]
 }
