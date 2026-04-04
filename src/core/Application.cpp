@@ -38,12 +38,14 @@ Application::Application(const std::string& name, uint32_t width, uint32_t heigh
     m_Renderer->InitViewport();
 
     m_ActiveScene = std::make_shared<Scene>();
+	m_ActiveScene->OnStart();
     m_SceneRenderer = std::make_unique<DefaultSceneRenderer>();
 	m_SceneRenderer->Init(m_Renderer.get(), &m_AssetManager);
 }
 
 Application::~Application()
 {
+	m_ActiveScene->OnStop();
     // Vulkan requires waiting for the GPU to be idle before destroying resources
     m_Renderer->getDevice().getDevice().waitIdle();
 
@@ -80,6 +82,8 @@ void Application::ProcessEvents()
 
 void Application::OnEvent(Event& e)
 {
+	std::cout << "Event: " << e.ToString() << std::endl;
+
     EventDispatcher dispatcher(e);
 
     // Route core window events first
@@ -116,6 +120,24 @@ void Application::SetSceneRenderer(std::unique_ptr<SceneRenderer> customRenderer
 {
     m_SceneRenderer = std::move(customRenderer);
     m_SceneRenderer->Init(m_Renderer.get(), &m_AssetManager);
+}
+
+void Application::LoadScene(std::shared_ptr<Scene> newScene)
+{
+	std::cout << "Loading new scene: " << std::endl;
+    if (m_ActiveScene) {
+        m_ActiveScene->OnStop();
+    }
+
+    m_ActiveScene = newScene;
+
+	std::cout << "Dispatching SceneLoadedEvent for scene: " << std::endl;
+
+    SceneLoadedEvent event(m_ActiveScene.get());
+
+    OnEvent(event);
+
+    m_ActiveScene->OnStart();
 }
 
 // -------------------------------------------------------------------

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "events/Event.hpp"
+#include "scene/Scene.hpp"
 
 
 class WindowResizeEvent : public Event
@@ -59,4 +60,17 @@ public:
 
 	EVENT_CLASS_TYPE(AppRender)
 	EVENT_CLASS_CATEGORY(EventCategoryApplication)
+};
+
+class SceneLoadedEvent : public Event
+{
+public:
+	SceneLoadedEvent(Scene* newScene) : m_Scene(newScene) {}
+
+	Scene* GetScene() const { return m_Scene; }
+
+	EVENT_CLASS_TYPE(SceneLoaded)
+	EVENT_CLASS_CATEGORY(EventCategoryApplication)
+private:
+	Scene* m_Scene;
 };

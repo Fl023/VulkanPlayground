@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Scene.hpp"
+#include "events/Event.hpp"
 #include <entt/entt.hpp>
 
 class Entity
@@ -66,4 +67,26 @@ public:
 private:
     entt::entity m_EntityHandle{ entt::null };
     Scene* m_Scene = nullptr; // Die Scene, zu der diese Entity gehört [cite: 2, 3]
+};
+
+class ScriptableEntity {
+public:
+    virtual ~ScriptableEntity() = default;
+
+    template<typename T>
+    T& GetComponent() {
+        return m_Entity.GetComponent<T>();
+    }
+
+protected:
+    virtual void OnCreate() {}
+    virtual void OnUpdate(float deltaTime) {}
+    virtual void OnDestroy() {}
+
+    virtual void OnEvent(Event& event) {}
+
+private:
+    Entity m_Entity;
+
+    friend class Scene;
 };

@@ -5,6 +5,7 @@
 #include "Camera.hpp"
 #include "Texture.hpp"
 #include "Material.hpp"
+#include "Entity.hpp"
 
 struct IDComponent {
     UUID ID;
@@ -113,3 +114,19 @@ struct SkyboxComponent {
     SkyboxComponent(AssetHandle handle) : CubemapHandle(handle) {}
 };
 
+struct NativeScriptComponent {
+    ScriptableEntity* Instance = nullptr;
+
+    ScriptableEntity* (*InstantiateScript)() = nullptr;
+    void (*DestroyScript)(NativeScriptComponent*) = nullptr;
+
+    template<typename T>
+    void Bind() {
+        InstantiateScript = []() { return static_cast<ScriptableEntity*>(new T()); };
+        DestroyScript = [](NativeScriptComponent* nsc) 
+        {
+            delete nsc->Instance;
+            nsc->Instance = nullptr;
+        };
+    }
+};

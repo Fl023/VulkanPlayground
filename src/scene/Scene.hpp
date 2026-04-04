@@ -11,10 +11,13 @@ public:
 
     // Erstellt eine Entity und fügt Standard-Komponenten hinzu
     Entity CreateEntity(const std::string& name = std::string());
-
-    void OnUpdate(float deltaTime);
-
     void DestroyEntity(Entity entity);
+
+    void OnStart();
+    void OnUpdate(float deltaTime);
+    void OnStop();
+
+    
 
 	void Clear();
 

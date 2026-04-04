@@ -26,11 +26,11 @@ public:
 
     void SetSceneRenderer(std::unique_ptr<SceneRenderer> customRenderer);
 
-    void LoadScene(std::shared_ptr<Scene> newScene) { m_ActiveScene = newScene; }
+    void LoadScene(std::shared_ptr<Scene> newScene);
 
     VulkanWindow& GetWindow() { return *m_Window; }
     VulkanRenderer& GetRenderer() { return *m_Renderer; }
-    Scene& GetActiveScene() { return *m_ActiveScene; }
+    std::shared_ptr<Scene> GetActiveScene() { return m_ActiveScene; }
     AssetManager& GetAssetManager() { return m_AssetManager; }
 
     static Application& Get() { return *s_Instance; }

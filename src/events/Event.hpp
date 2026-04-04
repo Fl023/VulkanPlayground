@@ -14,7 +14,7 @@ enum class EventType
 {
 	None = 0,
 	WindowClose, WindowResize, WindowFocus, WindowLostFocus, WindowMoved,
-	AppTick, AppUpdate, AppRender,
+	AppTick, AppUpdate, AppRender, SceneLoaded,
 	KeyPressed, KeyReleased, KeyTyped,
 	MouseButtonPressed, MouseButtonReleased, MouseMoved, MouseScrolled
 };

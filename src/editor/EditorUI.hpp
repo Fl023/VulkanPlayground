@@ -17,6 +17,13 @@ public:
     void Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer);
 
 private:
+    void BeginDockspace();
+    void EndDockspace();
+    void DrawMenuBar(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer);
+    void DrawViewport(Scene& scene, VulkanRenderer& renderer);
+    void DrawGizmos(Scene& scene, ImVec2 viewportOffset, ImVec2 viewportSize);
+
+private:
     SceneHierarchyPanel m_SceneHierarchyPanel;
     ContentBrowserPanel m_ContentBrowserPanel;
     Scene* m_CurrentScene = nullptr;

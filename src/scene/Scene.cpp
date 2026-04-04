@@ -68,6 +68,24 @@ void Scene::UpdateTransformHierarchy(entt::entity entityHandle, const glm::mat4&
     }
 }
 
+void Scene::OnStart()
+{
+    m_Registry.view<NativeScriptComponent>().each([this](auto entityID, auto& nsc)
+    {
+        if (!nsc.Instance)
+        {
+            // 1. Call the Lambda Factory to allocate the memory!
+            nsc.Instance = nsc.InstantiateScript();
+
+            // 2. Hook up the ECS entity reference
+            nsc.Instance->m_Entity = Entity{ entityID, this };
+
+            // 3. Trigger the user's startup code
+            nsc.Instance->OnCreate();
+        }
+    });
+}
+
 void Scene::OnUpdate(float deltaTime)
 {
     auto relView = m_Registry.view<TransformComponent, RelationshipComponent>();
@@ -81,6 +99,24 @@ void Scene::OnUpdate(float deltaTime)
             UpdateTransformHierarchy(entityHandle, glm::mat4(1.0f)); // Root nodes have an Identity parent matrix
         }
     }
+
+    m_Registry.view<NativeScriptComponent>().each([=](auto entityID, auto& nsc)
+    {
+        if (nsc.Instance) {
+            nsc.Instance->OnUpdate(deltaTime);
+        }
+    });
+}
+
+void Scene::OnStop()
+{
+    m_Registry.view<NativeScriptComponent>().each([=](auto entityID, auto& nsc)
+    {
+        if (nsc.Instance) {
+            nsc.Instance->OnDestroy();
+            nsc.DestroyScript(&nsc);
+        }
+    });
 }
 
 void Scene::Clear() {
