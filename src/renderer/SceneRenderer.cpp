@@ -3,6 +3,7 @@
 #include "scene/Entity.hpp"
 #include "scene/AssetManager.hpp"
 #include "scene/Components.hpp"
+#include "scene/Camera.hpp"
 #include "VulkanRenderer.hpp"
 #include "VulkanPipeline.hpp"
 
@@ -36,25 +37,7 @@ RenderView DefaultSceneRenderer::ExtractRenderData(Scene& scene)
     RenderView view;
 
     // ==========================================
-    // 1. EXTRACT CAMERA DATA (Global Frame Data)
-    // ==========================================
-    auto cameraView = scene.m_Registry.view<TransformComponent, CameraComponent>();
-    for (auto entity : cameraView) {
-        auto& transform = cameraView.get<TransformComponent>(entity);
-        auto& camComp = cameraView.get<CameraComponent>(entity);
-
-        if (camComp.Primary) {
-            camComp.SceneCamera.RecalculateViewMatrix(transform.WorldMatrix);
-
-            // Fill the byte-ready struct that will be memcpy'd into the UBO!
-            view.FrameData.ViewMatrix = camComp.SceneCamera.GetViewMatrix();
-            view.FrameData.ProjMatrix = camComp.SceneCamera.GetProjectionMatrix();
-            break;
-        }
-    }
-
-    // ==========================================
-    // 2. EXTRACT OPAQUE MESHES (The Bucket Sort)
+    // 1. EXTRACT OPAQUE MESHES (The Bucket Sort)
     // ==========================================
     auto meshView = scene.m_Registry.view<MeshComponent, TransformComponent>();
     for (auto e : meshView) {
@@ -94,7 +77,7 @@ RenderView DefaultSceneRenderer::ExtractRenderData(Scene& scene)
     }
 
     // ==========================================
-    // 3. EXTRACT ENVIRONMENT
+    // 2. EXTRACT ENVIRONMENT
     // ==========================================
     auto skyboxView = scene.m_Registry.view<SkyboxComponent>();
     for (auto e : skyboxView) {
@@ -106,10 +89,13 @@ RenderView DefaultSceneRenderer::ExtractRenderData(Scene& scene)
     return view;
 }
 
-void DefaultSceneRenderer::RenderScene(Scene& scene)
+void DefaultSceneRenderer::RenderScene(Scene& scene, const Camera& activeCamera)
 {
     // 1. Convert ECS state into Render Data
     RenderView frameView = ExtractRenderData(scene);
+
+    frameView.FrameData.ViewMatrix = activeCamera.GetViewMatrix();
+    frameView.FrameData.ProjMatrix = activeCamera.GetProjectionMatrix();
 
     // 2. Start the m_Backend Frame (Handles swapchain acquisition & UBO upload)
     if (m_Backend->BeginFrame(frameView))

@@ -5,12 +5,13 @@
 #include "core/Input.hpp"
 #include "scene/AssetManager.hpp"
 #include "editor/EditorUI.hpp"
+#include "editor/EditorLayer.hpp"
 #include "scene/Model.hpp"
 #include "scene/SceneSerializer.hpp"
+#include "scripts/NativeScriptsRegistry.hpp"
 
 
 #include "core/Application.hpp"
-
 
 class CameraController : public ScriptableEntity
 {
@@ -58,88 +59,13 @@ public:
 	}
 };
 
-class GameLayer : public Layer
-{
-public:
-	GameLayer() : Layer("Game Layer") 
-	{
-		m_CurrentScene = Application::Get().GetActiveScene();
-	}
-	~GameLayer() = default;
-	virtual void OnAttach() override 
-	{
-		BindCameraControllerToPrimaryCamera();
-	}
-	virtual void OnDetach() override {}
-	virtual void OnUpdate(Timestep ts) override {}
-	virtual void OnImGuiRender() override {}
-	virtual void OnEvent(Event& event) override 
-	{
-		std::cout << "GameLayer received event: " << event.GetName() << std::endl;
-		EventDispatcher dispatcher(event);
-		dispatcher.Dispatch<SceneLoadedEvent>([this](SceneLoadedEvent& event) { return OnSceneLoaded(event); });
-	}
-
-private:
-	bool OnSceneLoaded(SceneLoadedEvent& e)
-	{
-		std::cout << "GameLayer handling SceneLoadedEvent for scene: " << std::endl;
-		m_CurrentScene = Application::Get().GetActiveScene();
-		BindCameraControllerToPrimaryCamera();
-		return false;
-	}
-
-	void BindCameraControllerToPrimaryCamera()
-	{
-		auto view = m_CurrentScene->m_Registry.view<CameraComponent>();
-		for (auto entityID : view)
-		{
-			Entity cameraEntity{ entityID, m_CurrentScene.get()};
-			// If it's the primary camera, give it the controller
-			if (cameraEntity.GetComponent<CameraComponent>().Primary)
-			{
-				cameraEntity.AddComponent<NativeScriptComponent>().Bind<CameraController>();
-				std::cout << "Camera Controller successfully attached!\n";
-				break;
-			}
-		}
-	}
-private:
-	std::shared_ptr<Scene> m_CurrentScene = nullptr;
-};
-
-class EditorLayer : public Layer
-{
-	public:
-	EditorLayer(AssetManager* assetManager, VulkanRenderer* renderer) 
-		: Layer("Editor Layer"), 
-		m_AssetManager(assetManager), 
-		m_Renderer(renderer) {}
-
-	~EditorLayer() = default;
-	virtual void OnAttach() override {}
-	virtual void OnDetach() override {}
-	virtual void OnUpdate(Timestep ts) override {}
-	virtual void OnImGuiRender() override 
-	{
-		std::shared_ptr<Scene> activeScene = Application::Get().GetActiveScene();
-		m_EditorUI.Draw(*activeScene, *m_AssetManager, *m_Renderer);
-	}
-
-	virtual void OnEvent(Event& event) override {}
-
-private:
-	EditorUI m_EditorUI;
-	AssetManager* m_AssetManager = nullptr;
-	VulkanRenderer* m_Renderer = nullptr;
-};
-
 class Sandbox : public Application
 {
 	public:
 	Sandbox() : Application("Vulkan Engine Sandbox") 
 	{
-		PushLayer(new GameLayer());
+		NativeScriptRegistry::Register<CameraController>("CameraController");
+		// PushLayer(new GameLayer());
 		PushOverlay(new EditorLayer(&GetAssetManager(), &GetRenderer()));
 	}
 	~Sandbox() = default;

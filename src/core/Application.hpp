@@ -4,7 +4,6 @@
 #include "events/Event.hpp"
 #include "events/ApplicationEvent.hpp"
 #include "core/LayerStack.hpp"
-#include "renderer/SceneRenderer.hpp"
 #include "renderer/ImGuiLayer.hpp"
 #include "scene/AssetManager.hpp"
 
@@ -18,19 +17,13 @@ public:
     void Close();
 
     void QueueEvent(std::unique_ptr<Event> e);
-
     void OnEvent(Event& e);
 
     void PushLayer(Layer* layer);
     void PushOverlay(Layer* layer);
 
-    void SetSceneRenderer(std::unique_ptr<SceneRenderer> customRenderer);
-
-    void LoadScene(std::shared_ptr<Scene> newScene);
-
     VulkanWindow& GetWindow() { return *m_Window; }
     VulkanRenderer& GetRenderer() { return *m_Renderer; }
-    std::shared_ptr<Scene> GetActiveScene() { return m_ActiveScene; }
     AssetManager& GetAssetManager() { return m_AssetManager; }
 
     static Application& Get() { return *s_Instance; }
@@ -44,9 +37,7 @@ private:
 protected:
     std::unique_ptr<VulkanWindow> m_Window;
     std::unique_ptr<VulkanRenderer> m_Renderer;
-    std::unique_ptr<SceneRenderer> m_SceneRenderer;
     AssetManager m_AssetManager;
-    std::shared_ptr<Scene> m_ActiveScene;
 
 	ImGuiLayer* m_ImGuiLayer;
     LayerStack m_LayerStack;

@@ -18,29 +18,6 @@ void ImGuiLayer::OnAttach()
 
     ImGui::StyleColorsDark();
 
-    //std::array<vk::DescriptorPoolSize, 11> pool_sizes = {
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eSampler, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eCombinedImageSampler, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eSampledImage, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageImage, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eUniformTexelBuffer, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageTexelBuffer, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eUniformBuffer, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageBuffer, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eUniformBufferDynamic, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eStorageBufferDynamic, 1000 },
-    //    vk::DescriptorPoolSize{ vk::DescriptorType::eInputAttachment, 1000 }
-    //};
-
-    //vk::DescriptorPoolCreateInfo pool_info{
-    //    .flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-    //    .maxSets = 1000 * static_cast<uint32_t>(pool_sizes.size()),
-    //    .poolSizeCount = static_cast<uint32_t>(pool_sizes.size()),
-    //    .pPoolSizes = pool_sizes.data()
-    //};
-
-    //m_ImGuiPool = vk::raii::DescriptorPool(m_Device.getDevice(), pool_info);
-
     // 2. GLFW Backend initialisieren
     // Nutzt jetzt deinen neuen Getter!
     ImGui_ImplGlfw_InitForVulkan(m_Device.getWindow().getNativeWindow(), true);

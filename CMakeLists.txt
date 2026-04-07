@@ -53,6 +53,8 @@ find_package(imgui CONFIG REQUIRED)
 find_package(imguizmo CONFIG REQUIRED)
 find_package(yaml-cpp CONFIG REQUIRED)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
+find_package(sol2 CONFIG REQUIRED)
+find_package(Lua CONFIG REQUIRED)
 
 file(GLOB_RECURSE ALL_SOURCES 
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
@@ -72,6 +74,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/src" 
     "${Stb_INCLUDE_DIR}"
+    ${LUA_INCLUDE_DIR}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE 
@@ -83,6 +86,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     imguizmo::imguizmo
     yaml-cpp::yaml-cpp
     unofficial::spirv-reflect
+    sol2::sol2
+    ${LUA_LIBRARIES}
 )
 
 # Pass all found .slang files to our compilation function

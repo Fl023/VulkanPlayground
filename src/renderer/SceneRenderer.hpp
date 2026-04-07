@@ -4,6 +4,7 @@ class VulkanRenderer;
 class AssetManager;
 class RenderGraph;
 class Scene;
+class Camera;
 #include "RenderGraph.hpp"
 #include "scene/RenderView.hpp"
 #include "scene/AssetHandle.hpp"
@@ -19,7 +20,7 @@ public:
     }
 
     // Extract data and build the graph for this specific frame
-    virtual void RenderScene(Scene& scene) = 0;
+    virtual void RenderScene(Scene& scene, const Camera& activeCamera) = 0;
 
 protected:
     VulkanRenderer* m_Backend = nullptr;
@@ -31,7 +32,7 @@ class DefaultSceneRenderer : public SceneRenderer {
 public:
     void Init(VulkanRenderer* backend, AssetManager* assetManager) override;
 
-    void RenderScene(Scene& scene) override;
+    void RenderScene(Scene& scene, const Camera& activeCamera) override;
 
 private:
     RenderGraph m_Graph;

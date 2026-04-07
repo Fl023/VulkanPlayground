@@ -1,5 +1,7 @@
 #include "SceneHierarchyPanel.hpp"
 #include "scene/Components.hpp"
+#include "scripts/ScriptEngine.hpp"
+#include "scripts/NativeScriptsRegistry.hpp"
 
 SceneHierarchyPanel::SceneHierarchyPanel(Scene* context)
 {
@@ -299,6 +301,9 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
         DisplayAddComponentEntry<CameraComponent>("Camera");
         DisplayAddComponentEntry<SkyboxComponent>("Skybox");
         DisplayAddComponentEntry<RelationshipComponent>("Relationship");
+        DisplayAddComponentEntry<RigidBodyComponent>("RigidBody");
+        DisplayAddComponentEntry<NativeScriptComponent>("Native Script");
+        DisplayAddComponentEntry<LuaScriptComponent>("Lua Script");
         ImGui::EndPopup();
     }
     ImGui::PopItemWidth();
@@ -353,20 +358,20 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
         }
     }, &renderer);
 
-    DrawComponent<CameraComponent>("Camera", entity, [this](auto& component)
+    DrawComponent<CameraComponent>("Camera", entity, [this, entity](auto& component)
     {
         auto& camera = component.SceneCamera;
 
         bool isPrimary = component.Primary;
-        if (ImGui::Checkbox("Primary", &isPrimary)) {
-            component.Primary = isPrimary;
-            if (isPrimary) {
-                auto view = m_Context->m_Registry.view<CameraComponent>();
-                for (auto otherEntityID : view) {
-                    if (otherEntityID != (entt::entity)m_SelectionContext) {
-                        view.get<CameraComponent>(otherEntityID).Primary = false;
-                    }
-                }
+        if (ImGui::Checkbox("Primary", &isPrimary)) 
+        {
+            if (isPrimary)
+            {
+                m_Context->SetPrimaryCamera(entity);
+            }
+            else
+            {
+                component.Primary = false;
             }
         }
 
@@ -487,4 +492,81 @@ void SceneHierarchyPanel::DrawComponents(Entity entity, AssetManager& assetManag
         ImGui::Text("Next Sibling: %s", nextSiblingName.c_str());
     });
 
+    DrawComponent<RigidBodyComponent>("RigidBody", entity, [](auto& component)
+    {
+        DrawVec3Control("Velocity", component.Velocity);
+        DrawVec3Control("Acceleration", component.Acceleration);
+
+        // Mass shouldn't be negative, so we clamp the drag float from 0.01 to a high number
+        ImGui::DragFloat("Mass", &component.Mass, 0.1f, 0.01f, 10000.0f, "%.2f");
+        ImGui::Checkbox("Use Gravity", &component.UseGravity);
+    });
+
+    DrawComponent<NativeScriptComponent>("Native Script", entity, [entity](auto& component)
+    {
+        const auto& scriptRegistry = NativeScriptRegistry::GetRegistry();
+
+        // 1. Determine the preview name for the dropdown
+        std::string currentScript = component.ScriptName;
+        if (currentScript.empty()) currentScript = "None";
+
+        // 2. Draw the Dropdown
+        if (ImGui::BeginCombo("Script Class", currentScript.c_str()))
+        {
+            // Option to clear/unbind the script
+            bool isNoneSelected = (currentScript == "None");
+            if (ImGui::Selectable("None", isNoneSelected))
+            {
+                component.InstantiateScript = nullptr;
+                component.DestroyScript = nullptr;
+                component.ScriptName = "";
+            }
+            if (isNoneSelected) ImGui::SetItemDefaultFocus();
+
+            // List all registered C++ scripts from the Registry
+            for (const auto& [name, factoryFunction] : scriptRegistry)
+            {
+                bool isSelected = (currentScript == name);
+                if (ImGui::Selectable(name.c_str(), isSelected))
+                {
+                    // Apply the new script to the entity using the factory!
+                    factoryFunction(entity);
+                }
+                if (isSelected) ImGui::SetItemDefaultFocus();
+            }
+            ImGui::EndCombo();
+        }
+
+        // 3. Show Status Info
+        bool isBound = component.InstantiateScript != nullptr;
+        bool isInstantiated = component.Instance != nullptr;
+
+        ImGui::Text("Script Bound: %s", isBound ? "Yes" : "No");
+        ImGui::Text("Currently Running: %s", isInstantiated ? "Yes" : "No");
+
+        if (!isBound) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
+            ImGui::TextWrapped("Warning: No script bound! Please select a script from the dropdown.");
+            ImGui::PopStyleColor();
+        }
+    });
+
+    DrawComponent<LuaScriptComponent>("Lua Script", entity, [this, entity](auto& component)
+    {
+        ImGui::InputText("Script Path", &component.ScriptPath);
+
+        ImGui::Text("Environment Ready: %s", component.Environment.valid() ? "Yes" : "No");
+        ImGui::Text("Has OnUpdate: %s", component.OnUpdate.valid() ? "Yes" : "No");
+
+        if (ImGui::Button("Reload Script"))
+        {
+            if (ScriptEngine::LoadScript(component, entity))
+            {
+                if (component.OnCreate.valid()) {
+                    component.OnCreate();
+                }
+                std::cout << "Script successfully reloaded!" << std::endl;
+            }
+        }
+    });
 }

@@ -17,6 +17,8 @@
     "imguizmo",
     "tinygltf",
     "yaml-cpp",
-    "spirv-reflect"
+    "spirv-reflect",
+    "sol2",
+    "lua"
   ]
 }

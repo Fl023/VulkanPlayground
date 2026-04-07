@@ -24,7 +24,5 @@ private:
 	const VulkanSwapChain& m_SwapChain;
     VkFormat m_ColorFormat;
 
-    //vk::raii::DescriptorPool m_ImGuiPool = nullptr;
-
     bool m_BlockEvents = true;
 };

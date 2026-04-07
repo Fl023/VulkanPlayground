@@ -2,6 +2,7 @@
 #include "Entity.hpp"
 #include "Components.hpp"
 #include "core/Input.hpp"
+#include "scripts/ScriptEngine.hpp"
 
 Entity Scene::CreateEntity(const std::string& name) {
     Entity entity(m_Registry.create(), this);
@@ -84,10 +85,67 @@ void Scene::OnStart()
             nsc.Instance->OnCreate();
         }
     });
+
+    sol::state& lua = ScriptEngine::GetState();
+
+    // ==========================================
+    // INITIALIZE LUA SCRIPTS
+    // ==========================================
+    m_Registry.view<LuaScriptComponent>().each([this](auto entityID, auto& lsc)
+    {
+        Entity entity{ entityID, this };
+
+        if (ScriptEngine::LoadScript(lsc, entity))
+        {
+            if (lsc.OnCreate.valid()) {
+                lsc.OnCreate();
+            }
+        }
+    });
 }
 
 void Scene::OnUpdate(float deltaTime)
 {
+    auto physicsView = m_Registry.view<RigidBodyComponent, TransformComponent>();
+    for (auto entityID : physicsView)
+    {
+        auto& rb = physicsView.get<RigidBodyComponent>(entityID);
+        auto& transform = physicsView.get<TransformComponent>(entityID);
+
+        // Apply Gravity Force
+        if (rb.UseGravity) {
+            // Standard Earth gravity is roughly 9.81 m/s^2 downwards
+            rb.Acceleration.y = -9.81f;
+        }
+
+        // Integrate Velocity (Velocity = Velocity + Acceleration * Time)
+        rb.Velocity += rb.Acceleration * deltaTime;
+
+        // Integrate Position (Position = Position + Velocity * Time)
+        transform.Translation += rb.Velocity * deltaTime;
+
+        // Clear acceleration for the next frame (so forces don't infinitely stack)
+        rb.Acceleration = glm::vec3(0.0f);
+    }
+
+    // ==========================================
+    // TICK LUA SCRIPTS
+    // ==========================================
+    m_Registry.view<LuaScriptComponent>().each([=](auto entityID, auto& lsc)
+    {
+        if (lsc.OnUpdate.valid()) {
+            // Using protected_function prevents the C++ engine from crashing if your Lua code has a typo!
+            auto result = lsc.OnUpdate(deltaTime);
+            if (!result.valid()) {
+                sol::error err = result;
+                std::cout << "Lua Update Error: " << err.what() << std::endl;
+            }
+        }
+    });
+
+
+
+
     auto relView = m_Registry.view<TransformComponent, RelationshipComponent>();
 
     for (auto entityHandle : relView) {
@@ -108,6 +166,26 @@ void Scene::OnUpdate(float deltaTime)
     });
 }
 
+void Scene::OnUpdateEditor(float deltaTime)
+{
+    // ==========================================
+    // UPDATE TRANSFORMS (Required for Gizmos and rendering!)
+    // ==========================================
+    auto relView = m_Registry.view<TransformComponent, RelationshipComponent>();
+
+    for (auto entityHandle : relView) {
+        const auto& rel = relView.get<RelationshipComponent>(entityHandle);
+
+        // We only want to start the recursion from ROOT nodes
+        if (rel.Parent == entt::null) {
+            UpdateTransformHierarchy(entityHandle, glm::mat4(1.0f));
+        }
+    }
+
+    // NOTE: If you later add an "Editor Camera" that flies around when you hold Right-Click,
+    // you would put its Update() function right here!
+}
+
 void Scene::OnStop()
 {
     m_Registry.view<NativeScriptComponent>().each([=](auto entityID, auto& nsc)
@@ -117,10 +195,91 @@ void Scene::OnStop()
             nsc.DestroyScript(&nsc);
         }
     });
+
+    m_Registry.view<LuaScriptComponent>().each([=](auto entityID, auto& lsc)
+    {
+        if (lsc.OnDestroy.valid()) {
+            auto result = lsc.OnDestroy();
+            if (!result.valid()) {
+                sol::error err = result;
+                std::cout << "Lua OnDestroy Error: " << err.what() << std::endl;
+            }
+        }
+	});
+}
+
+void Scene::OnEvent(Event& event)
+{
+    // We want to send events to scripts before the C++ engine processes them, so that Lua scripts have a chance to "consume" the event and prevent it from reaching the C++ code.
+    m_Registry.view<LuaScriptComponent>().each([&event](auto entityID, auto& lsc)
+    {
+        if (lsc.OnEvent.valid()) {
+            auto result = lsc.OnEvent(event);
+            if (!result.valid()) {
+                sol::error err = result;
+                std::cout << "Lua OnEvent Error: " << err.what() << std::endl;
+            }
+        }
+    });
+
+    m_Registry.view<NativeScriptComponent>().each([&event](auto entityID, auto& nsc)
+    {
+        if (nsc.Instance) {
+            nsc.Instance->OnEvent(event);
+        }
+	});
+}
+
+void Scene::OnViewportResize(uint32_t width, uint32_t height)
+{
+    m_ViewportWidth = width;
+    m_ViewportHeight = height;
+
+    // Update all cameras in the scene that don't have a fixed aspect ratio
+    auto view = m_Registry.view<CameraComponent>();
+    for (auto entity : view)
+    {
+        auto& cameraComponent = view.get<CameraComponent>(entity);
+        if (!cameraComponent.FixedAspectRatio)
+        {
+            cameraComponent.SceneCamera.SetViewportSize(width, height);
+        }
+    }
 }
 
 void Scene::Clear() {
     m_Registry.clear();
 }
 
+void Scene::SetPrimaryCamera(Entity cameraEntity)
+{
+    // 1. Validate the entity actually has a camera
+    if (!cameraEntity.HasComponent<CameraComponent>()) return;
+
+    // 2. Loop through all cameras and turn them off
+    auto view = m_Registry.view<CameraComponent>();
+    for (auto entityID : view)
+    {
+        if (entityID != (entt::entity)cameraEntity)
+        {
+            view.get<CameraComponent>(entityID).Primary = false;
+        }
+    }
+
+    // 3. Turn the target camera on
+    cameraEntity.GetComponent<CameraComponent>().Primary = true;
+}
+
+Entity Scene::GetPrimaryCameraEntity()
+{
+    auto view = m_Registry.view<CameraComponent>();
+    for (auto entityID : view)
+    {
+        if (view.get<CameraComponent>(entityID).Primary)
+        {
+            return Entity{ entityID, this };
+        }
+    }
+    return {}; // Return a null entity if none exists
+}
 

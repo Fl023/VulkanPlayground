@@ -13,9 +13,11 @@ public:
     SceneSerializer(Scene* scene, AssetManager* assetManager);
 
     void Serialize(const std::string& filepath);
+    std::string SerializeToString();
     void SerializeRuntime(const std::string& filepath);
 
     bool Deserialize(const std::string& filepath, VulkanRenderer& renderer);
+    bool DeserializeFromString(const std::string& yamlString, VulkanRenderer& renderer);
     bool DeserializeRuntime(const std::string& filepath, VulkanRenderer& renderer);
 
 private:

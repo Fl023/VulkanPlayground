@@ -4,10 +4,12 @@
 #include "FileDialogs.hpp"
 #include "core/Application.hpp"
 
-void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer)
+void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer, std::function<void(const std::string&)> onSceneOpen)
 {
     BeginDockspace();
-    DrawMenuBar(scene, assetManager, renderer);
+
+    // Pass the function down to the menu bar!
+    DrawMenuBar(scene, assetManager, renderer, onSceneOpen);
 
     // Sync Scene context
     if (m_CurrentScene != &scene) {
@@ -23,6 +25,52 @@ void EditorUI::Draw(Scene& scene, AssetManager& assetManager, VulkanRenderer& re
     DrawViewport(scene, renderer);
 
     EndDockspace();
+}
+
+void EditorUI::DrawToolbar(SceneState& currentState, std::function<void()> onPlay, std::function<void()> onStop)
+{
+    // Remove padding so the toolbar sits flush
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 2));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(0, 0));
+
+    // Make the window background slightly transparent or invisible if you prefer
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
+
+    // These flags ensure it's just a raw panel, not a movable window
+    ImGuiWindowFlags toolbarFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+
+    ImGui::Begin("##Toolbar", nullptr, toolbarFlags);
+
+    // Calculate button size and center it dynamically
+    float buttonSize = ImGui::GetWindowHeight() - 4.0f;
+    ImGui::SetCursorPosX((ImGui::GetWindowContentRegionMax().x * 0.5f) - (buttonSize * 0.5f));
+
+    // Draw the correct button based on the state we passed in
+    if (currentState == SceneState::Edit)
+    {
+        // We push a green color for the Play button!
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.7f, 0.2f, 1.0f));
+        if (ImGui::Button("PLAY", ImVec2(buttonSize * 2.5f, buttonSize)))
+        {
+            onPlay(); // Tell the EditorLayer to start the game!
+        }
+        ImGui::PopStyleColor();
+    }
+    else if (currentState == SceneState::Play)
+    {
+        // We push a red color for the Stop button!
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Button("STOP", ImVec2(buttonSize * 2.5f, buttonSize)))
+        {
+            onStop(); // Tell the EditorLayer to stop the game!
+        }
+        ImGui::PopStyleColor();
+    }
+
+    ImGui::End();
+
+    ImGui::PopStyleColor();
+    ImGui::PopStyleVar(2);
 }
 
 void EditorUI::BeginDockspace()
@@ -54,19 +102,14 @@ void EditorUI::EndDockspace()
     ImGui::End(); // Ends the "Main Editor Dockspace" window
 }
 
-void EditorUI::DrawMenuBar(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer)
-{
+void EditorUI::DrawMenuBar(Scene& scene, AssetManager& assetManager, VulkanRenderer& renderer, std::function<void(const std::string&)> onSceneOpen) {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
 
             if (ImGui::MenuItem("Open Scene...")) {
                 std::string filepath = FileDialogs::OpenFile("Scene File (*.yaml)\0*.yaml\0");
                 if (!filepath.empty()) {
-                    // Using the safe App Scene Swap logic!
-                    std::shared_ptr<Scene> newScene = std::make_shared<Scene>();
-                    SceneSerializer serializer(newScene.get(), &assetManager);
-                    serializer.Deserialize(filepath, renderer);
-                    Application::Get().LoadScene(newScene);
+                    onSceneOpen(filepath);
                 }
             }
 
@@ -104,27 +147,19 @@ void EditorUI::DrawViewport(Scene& scene, VulkanRenderer& renderer)
     ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
     ImVec2 viewportOffset = ImGui::GetCursorPos();
-    ImVec2 viewportSize = ImGui::GetContentRegionAvail();
+    m_ViewportSize = ImGui::GetContentRegionAvail();
 
-    if (viewportSize.x > 0.0f && viewportSize.y > 0.0f) {
-        auto cameraViewReg = scene.m_Registry.view<CameraComponent>();
-        for (auto entityID : cameraViewReg) {
-            auto& camComp = cameraViewReg.get<CameraComponent>(entityID);
-            if (camComp.Primary) {
-                camComp.SceneCamera.SetViewportSize(static_cast<uint32_t>(viewportSize.x), static_cast<uint32_t>(viewportSize.y));
-            }
-        }
-    }
+	scene.OnViewportResize(static_cast<uint32_t>(m_ViewportSize.x), static_cast<uint32_t>(m_ViewportSize.y));
 
-    renderer.ResizeViewport(static_cast<uint32_t>(viewportSize.x), static_cast<uint32_t>(viewportSize.y));
+    renderer.ResizeViewport(static_cast<uint32_t>(m_ViewportSize.x), static_cast<uint32_t>(m_ViewportSize.y));
 
     ImTextureID textureID = reinterpret_cast<ImTextureID>(static_cast<VkDescriptorSet>(renderer.GetViewportTextureID()));
     if (renderer.GetViewportTextureID()) {
-        ImGui::Image(textureID, viewportSize);
+        ImGui::Image(textureID, m_ViewportSize);
     }
 
     // Call Gizmos while we are still inside the Viewport Window!
-    DrawGizmos(scene, viewportOffset, viewportSize);
+    DrawGizmos(scene, viewportOffset, m_ViewportSize);
 
     ImGui::End();
     ImGui::PopStyleVar();

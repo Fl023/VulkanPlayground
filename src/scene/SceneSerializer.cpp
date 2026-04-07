@@ -5,6 +5,7 @@
 #include "AssetManager.hpp"
 #include "Model.hpp"
 #include "renderer/VulkanRenderer.hpp"
+#include "scripts/NativeScriptsRegistry.hpp"
 
 YAML::Emitter& operator<<(YAML::Emitter& out, const glm::vec3& vec)
 {
@@ -215,6 +216,36 @@ void SceneSerializer::SerializeEntity(YAML::Emitter& out, Entity entity)
 		out << YAML::EndMap;
 	}
 
+	if (entity.HasComponent<RigidBodyComponent>()) {
+		out << YAML::Key << "RigidBodyComponent";
+		out << YAML::BeginMap;
+		auto& rb = entity.GetComponent<RigidBodyComponent>();
+		out << YAML::Key << "Velocity" << YAML::Value << rb.Velocity;
+		out << YAML::Key << "Acceleration" << YAML::Value << rb.Acceleration;
+		out << YAML::Key << "Mass" << YAML::Value << rb.Mass;
+		out << YAML::Key << "UseGravity" << YAML::Value << rb.UseGravity;
+		out << YAML::EndMap;
+	}
+
+	if (entity.HasComponent<NativeScriptComponent>()) {
+		auto& nsc = entity.GetComponent<NativeScriptComponent>();
+		// Only save it if it actually has a valid script bound to it
+		if (!nsc.ScriptName.empty()) {
+			out << YAML::Key << "NativeScriptComponent";
+			out << YAML::BeginMap;
+			out << YAML::Key << "ScriptName" << YAML::Value << nsc.ScriptName;
+			out << YAML::EndMap;
+		}
+	}
+
+	if (entity.HasComponent<LuaScriptComponent>()) {
+		out << YAML::Key << "LuaScriptComponent";
+		out << YAML::BeginMap;
+		auto& lsc = entity.GetComponent<LuaScriptComponent>();
+		out << YAML::Key << "ScriptPath" << YAML::Value << lsc.ScriptPath;
+		out << YAML::EndMap;
+	}
+
 	out << YAML::EndMap;
 }
 
@@ -271,6 +302,14 @@ void SceneSerializer::SerializeAssetRegistry(YAML::Emitter& out)
 		out << YAML::Key << "Handle" << YAML::Value << handle;
 		out << YAML::Key << "Name" << YAML::Value << registryName; // <--- The Registry Name!
 		out << YAML::Key << "AlbedoTexture" << YAML::Value << material->GetTextureHandle();
+
+		const auto& state = material->GetState();
+		out << YAML::Key << "ShaderPath" << YAML::Value << state.ShaderPath;
+		out << YAML::Key << "Culling" << YAML::Value << (int)state.Culling;
+		out << YAML::Key << "Blending" << YAML::Value << (int)state.Blending;
+		out << YAML::Key << "Depth" << YAML::Value << (int)state.Depth;
+		out << YAML::Key << "IsWireframe" << YAML::Value << state.IsWireframe;
+
 		out << YAML::EndMap;
 	}
 	out << YAML::EndSeq;
@@ -293,8 +332,7 @@ void SceneSerializer::SerializeAssetRegistry(YAML::Emitter& out)
 	out << YAML::EndMap; // End AssetRegistry
 }
 
-
-void SceneSerializer::Serialize(const std::string& filepath)
+std::string SceneSerializer::SerializeToString()
 {
 	YAML::Emitter out;
 	out << YAML::BeginMap;
@@ -314,8 +352,25 @@ void SceneSerializer::Serialize(const std::string& filepath)
 	out << YAML::EndSeq;
 	out << YAML::EndMap;
 
+	// YAML::Emitter::c_str() returns a const char*, which converts perfectly to std::string
+	return std::string(out.c_str());
+}
+
+void SceneSerializer::Serialize(const std::string& filepath)
+{
+	// 1. Let the other method do all the YAML construction!
+	std::string yamlString = SerializeToString();
+
+	// 2. Open the file and write the string to it
 	std::ofstream fout(filepath);
-	fout << out.c_str();
+	if (fout.is_open())
+	{
+		fout << yamlString;
+	}
+	else
+	{
+		std::cerr << "Failed to open file for writing: " << filepath << std::endl;
+	}
 }
 
 void SceneSerializer::SerializeRuntime(const std::string& filepath)
@@ -325,10 +380,23 @@ void SceneSerializer::SerializeRuntime(const std::string& filepath)
 bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& renderer)
 {
 	std::ifstream stream(filepath);
+	if (!stream.is_open())
+	{
+		std::cerr << "Failed to open scene file: " << filepath << std::endl;
+		return false;
+	}
+
+	// Read the entire file into a string
 	std::stringstream strStream;
 	strStream << stream.rdbuf();
 
-	YAML::Node data = YAML::Load(strStream.str());
+	// Pass the resulting string directly into our new method!
+	return DeserializeFromString(strStream.str(), renderer);
+}
+
+bool SceneSerializer::DeserializeFromString(const std::string& yamlString, VulkanRenderer& renderer)
+{
+	YAML::Node data = YAML::Load(yamlString);
 	if (!data["Scene"])
 	{
 		std::cerr << "Invalid scene file: Missing 'Scene' node." << std::endl;
@@ -338,6 +406,7 @@ bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& r
 	std::string sceneName = data["Scene"].as<std::string>();
 	std::cout << "Deserializing scene: " << sceneName << std::endl;
 
+	std::unordered_map<AssetHandle, std::string> serializedMeshes;
 	// AssetRegistry
 	auto assetRegistryNode = data["AssetRegistry"];
 	if (assetRegistryNode) {
@@ -382,8 +451,25 @@ bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& r
 				AssetHandle albedoHandle = matNode["AlbedoTexture"].as<AssetHandle>();
 
 				MaterialRenderState state{};
+				if (matNode["ShaderPath"]) state.ShaderPath = matNode["ShaderPath"].as<std::string>();
+				if (matNode["Culling"]) state.Culling = (CullMode)matNode["Culling"].as<int>();
+				if (matNode["Blending"]) state.Blending = (BlendMode)matNode["Blending"].as<int>();
+				if (matNode["Depth"]) state.Depth = (DepthState)matNode["Depth"].as<int>();
+				if (matNode["IsWireframe"]) state.IsWireframe = matNode["IsWireframe"].as<bool>();
+
 				vk::Format targetFormat = renderer.GetSwapchainFormat();
 				m_AssetManager->CreateMaterialWithHandle(handle, renderer, name, state, targetFormat, albedoHandle);
+			}
+		}
+
+		auto meshesNode = assetRegistryNode["Meshes"];
+		if (meshesNode) {
+			for (const auto& meshNode : meshesNode) {
+				AssetHandle savedHandle = meshNode["Handle"].as<AssetHandle>();
+				std::string name = meshNode["Name"].as<std::string>();
+
+				// Remember what string name this old handle belonged to
+				serializedMeshes[savedHandle] = name;
 			}
 		}
 	}
@@ -463,7 +549,21 @@ bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& r
 
 		// Load Asset Handles (These are guaranteed to be valid now because of the Registry phase!)
 		if (auto meshNode = entityNode["MeshComponent"]) {
-			spawnedEntity.AddComponent<MeshComponent>(meshNode["MeshHandle"].as<AssetHandle>());
+			AssetHandle savedHandle = meshNode["MeshHandle"].as<AssetHandle>();
+			AssetHandle activeHandle = savedHandle;
+
+			// FIX: If this is a built-in mesh from a previous session, 
+			// map its old handle to the new one generated at engine startup!
+			if (serializedMeshes.find(savedHandle) != serializedMeshes.end()) {
+				std::string meshName = serializedMeshes[savedHandle];
+				AssetHandle currentHandle = m_AssetManager->GetMeshHandle(meshName);
+
+				if (currentHandle != INVALID_ASSET_HANDLE) {
+					activeHandle = currentHandle;
+				}
+			}
+
+			spawnedEntity.AddComponent<MeshComponent>(activeHandle);
 		}
 
 		if (auto matNode = entityNode["MaterialComponent"]) {
@@ -482,6 +582,33 @@ bool SceneSerializer::Deserialize(const std::string& filepath, VulkanRenderer& r
 			if (model) {
 				model->Instantiate(m_Scene, modelHandle, spawnedEntity);
 			}
+		}
+
+		// Load Physics
+		if (auto rbNode = entityNode["RigidBodyComponent"]) {
+			auto& rb = spawnedEntity.AddComponent<RigidBodyComponent>();
+			rb.Velocity = rbNode["Velocity"].as<glm::vec3>();
+			rb.Acceleration = rbNode["Acceleration"].as<glm::vec3>();
+			rb.Mass = rbNode["Mass"].as<float>();
+			rb.UseGravity = rbNode["UseGravity"].as<bool>();
+		}
+
+		// Load Native Scripts
+		if (auto nativeNode = entityNode["NativeScriptComponent"]) {
+			std::string scriptName = nativeNode["ScriptName"].as<std::string>();
+
+			// Ask the registry to find the C++ class matching this string and bind it
+			if (!NativeScriptRegistry::BindScript(spawnedEntity, scriptName)) {
+				std::cerr << "Warning: Could not find Native Script '" << scriptName << "' in Registry!\n";
+			}
+		}
+
+		// Load Lua Scripts
+		if (auto luaNode = entityNode["LuaScriptComponent"]) {
+			auto& lsc = spawnedEntity.AddComponent<LuaScriptComponent>();
+			lsc.ScriptPath = luaNode["ScriptPath"].as<std::string>();
+			// Note: The Lua environment is NOT initialized here!
+			// It will be initialized safely when m_ActiveScene->OnStart() runs.
 		}
 
 		// Record it in the dictionary so Pass 2 can find it

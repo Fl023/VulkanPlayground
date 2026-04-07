@@ -3,6 +3,7 @@
 #include "scene/RenderView.hpp"
 #include "renderer/RenderGraph.hpp"
 #include "scene/Scene.hpp"
+#include "scripts/ScriptEngine.hpp"
 
 
 #include <chrono>
@@ -37,20 +38,16 @@ Application::Application(const std::string& name, uint32_t width, uint32_t heigh
 
     m_Renderer->InitViewport();
 
-    m_ActiveScene = std::make_shared<Scene>();
-	m_ActiveScene->OnStart();
-    m_SceneRenderer = std::make_unique<DefaultSceneRenderer>();
-	m_SceneRenderer->Init(m_Renderer.get(), &m_AssetManager);
+	// Initialize the Script Engine (Lua)
+	ScriptEngine::Init();
 }
 
 Application::~Application()
 {
-	m_ActiveScene->OnStop();
     // Vulkan requires waiting for the GPU to be idle before destroying resources
     m_Renderer->getDevice().getDevice().waitIdle();
 
     m_Renderer->DestroyViewport();
-    m_SceneRenderer.reset();
 }
 
 void Application::Close()
@@ -82,8 +79,6 @@ void Application::ProcessEvents()
 
 void Application::OnEvent(Event& e)
 {
-	std::cout << "Event: " << e.ToString() << std::endl;
-
     EventDispatcher dispatcher(e);
 
     // Route core window events first
@@ -116,30 +111,6 @@ void Application::PushOverlay(Layer* layer)
     layer->OnAttach();
 }
 
-void Application::SetSceneRenderer(std::unique_ptr<SceneRenderer> customRenderer)
-{
-    m_SceneRenderer = std::move(customRenderer);
-    m_SceneRenderer->Init(m_Renderer.get(), &m_AssetManager);
-}
-
-void Application::LoadScene(std::shared_ptr<Scene> newScene)
-{
-	std::cout << "Loading new scene: " << std::endl;
-    if (m_ActiveScene) {
-        m_ActiveScene->OnStop();
-    }
-
-    m_ActiveScene = newScene;
-
-	std::cout << "Dispatching SceneLoadedEvent for scene: " << std::endl;
-
-    SceneLoadedEvent event(m_ActiveScene.get());
-
-    OnEvent(event);
-
-    m_ActiveScene->OnStart();
-}
-
 // -------------------------------------------------------------------
 // MAIN LOOP
 // -------------------------------------------------------------------
@@ -167,10 +138,6 @@ void Application::Run()
             // 3. Update Game Logic (Layers)
             for (Layer* layer : m_LayerStack)
                 layer->OnUpdate(deltaTime);
-
-            if (m_ActiveScene) {
-                m_ActiveScene->OnUpdate(deltaTime);
-            }
         }
 
         // 4. Begin ImGui Frame
@@ -181,11 +148,6 @@ void Application::Run()
             layer->OnImGuiRender();
 
 		m_ImGuiLayer->endFrame();
-
-        if (!m_Minimized)
-        {
-            m_SceneRenderer->RenderScene(*m_ActiveScene);
-        }
 
         if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         {

@@ -5,7 +5,9 @@
 #include "Camera.hpp"
 #include "Texture.hpp"
 #include "Material.hpp"
-#include "Entity.hpp"
+#include "scripts/ScriptEngine.hpp"
+
+class ScriptableEntity;
 
 struct IDComponent {
     UUID ID;
@@ -117,11 +119,15 @@ struct SkyboxComponent {
 struct NativeScriptComponent {
     ScriptableEntity* Instance = nullptr;
 
+    std::string ScriptName = "";
+
     ScriptableEntity* (*InstantiateScript)() = nullptr;
     void (*DestroyScript)(NativeScriptComponent*) = nullptr;
 
     template<typename T>
-    void Bind() {
+    void Bind(const std::string& name = "") 
+    {
+        ScriptName = name;
         InstantiateScript = []() { return static_cast<ScriptableEntity*>(new T()); };
         DestroyScript = [](NativeScriptComponent* nsc) 
         {
@@ -129,4 +135,32 @@ struct NativeScriptComponent {
             nsc->Instance = nullptr;
         };
     }
+};
+
+struct RigidBodyComponent
+{
+    glm::vec3 Velocity = { 0.0f, 0.0f, 0.0f };
+    glm::vec3 Acceleration = { 0.0f, 0.0f, 0.0f };
+
+    float Mass = 1.0f;
+    bool UseGravity = true;
+
+    RigidBodyComponent() = default;
+};
+
+struct LuaScriptComponent
+{
+    std::string ScriptPath = "";
+
+    // Each script gets its own isolated environment (so variables don't bleed between entities)
+    sol::environment Environment;
+
+    // Cached references to the Lua functions
+    sol::protected_function OnCreate;
+    sol::protected_function OnUpdate;
+    sol::protected_function OnDestroy;
+	sol::protected_function OnEvent;
+
+    LuaScriptComponent() = default;
+    LuaScriptComponent(const std::string& path) : ScriptPath(path) {}
 };
